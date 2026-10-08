@@ -144,6 +144,29 @@ demonstrably easy to break by accident; a careful read had already missed it twi
   "free tier" rather than a dollar figure; what a run would cost at paid-tier rates
   is a different claim and does not share that column.
 
+## Reference: published pricing
+
+List prices for the providers this benchmark actually runs, on the tier the harness
+uses. These are published rates, not measured billing: what a run would cost, not what
+the results table reports. The results table reports this run. API pricing moves, so
+every figure below is dated and shows its derivation.
+
+Batch and Flex tiers are cheaper and are deliberately not used. Batch roughly halves
+the Gemini price, and destroys the latency measurement that is one of the four things
+being compared.
+
+| Provider | Tier used | List price / image | Derivation | Source |
+|---|---|---|---|---|
+| `gemini-3.1-flash-lite-image` | Standard, paid | **$0.0336** | Published per-image rate. Cross-checks against $30.00 per 1M output tokens at roughly 1,120 tokens per image. | [ai.google.dev pricing](https://ai.google.dev/gemini-api/docs/pricing), page last updated 2026-10-07, read 2026-10-09 |
+| `pollinations` | Anonymous, keyless | **$0**, gated rather than billed | Unpaid requests are refused with HTTP 402, not charged. The x402 challenge asks 10000 base units of USDC (6 decimals) = 0.01 USDC, so ~$0.01 is the price of not being gated. | Measured from the `payment-required` response header, 2026-10-08 |
+
+No Gemini image model has a free tier: Google lists "Free Tier: Not available" for all
+of them as of 2026-10-09. `gemini-2.5-flash-image`, which this harness targeted first,
+is deprecated, and Google's own documentation contradicts itself on when it goes away
+-- the pricing page says it shut down on 2026-10-02, the deprecations table says
+2027-03-15. That is left unresolved here because the harness moved to the named
+replacement rather than depend on either date.
+
 ## Setup
 
 ```bash

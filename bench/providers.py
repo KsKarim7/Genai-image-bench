@@ -23,7 +23,9 @@ import httpx
 # and the report says "free tier" rather than "$0.00". README carries paid-tier list
 # prices as a separate reference table, cited and dated.
 LIST_PRICE_USD_PER_IMAGE = {
-    "gemini-flash-image": 0.0,
+    # Standard tier, not batch: batch halves the price but destroys the latency
+    # measurement, which is one of the things being compared.
+    "gemini-3.1-flash-lite-image": 0.0336,
     "pollinations": 0.0,
     "huggingface": 0.0,
 }
@@ -162,15 +164,16 @@ class BaseProvider:
         return min(max((when - datetime.now(timezone.utc)).total_seconds(), 0.0), cap)
 
 
-class GeminiFlashImage(BaseProvider):
-    """Google Gemini 2.5 Flash Image (codename Nano Banana) via generateContent.
+class GeminiFlashLiteImage(BaseProvider):
+    """Google Gemini 3.1 Flash Lite Image via generateContent.
 
-    Returns image data inline as base64 in the candidate parts, alongside any text
-    parts the model emits. We take the first inline image part and ignore prose.
+    Image data arrives inline as base64 in the candidate parts, beside any prose the
+    model emits; the first inline image part wins. Named replacement for
+    gemini-2.5-flash-image, which is deprecated and has no free tier.
     """
 
-    name = "gemini-flash-image"
-    model_id = "gemini-2.5-flash-image"
+    name = "gemini-3.1-flash-lite-image"
+    model_id = "gemini-3.1-flash-lite-image"
     max_concurrency = 2
 
     def __init__(self) -> None:
@@ -287,7 +290,7 @@ class HuggingFaceInference(BaseProvider):
 
 
 ALL_PROVIDERS: list[type[BaseProvider]] = [
-    GeminiFlashImage,
+    GeminiFlashLiteImage,
     Pollinations,
     HuggingFaceInference,
 ]

@@ -45,7 +45,7 @@ def _cost_cell(o: dict) -> str:
     if not o["succeeded"]:
         return "—"
     # Zero is the measured cost of a free tier, not a missing figure.
-    return "free tier" if not o["est_cost_usd"] else f"${o['est_cost_usd']}"
+    return "free tier" if not o["est_cost_usd"] else f"${o['est_cost_usd']:.4f}"
 
 
 def _cache_cell(o: dict) -> str:
