@@ -1,0 +1,175 @@
+# Prompt suite.
+#
+# Pass criteria are written BEFORE any image is generated. This matters: deciding
+# what counts as success after seeing the outputs is how a comparison quietly turns
+# into a justification. If a criterion turns out to be badly specified, change it and
+# re-run everything — do not reinterpret it mid-scoring.
+#
+# Each prompt declares the axis it probes and the concrete checks the scorer applies.
+# Checks are written to be answerable by looking at the image, not by taste.
+
+axes:
+  prompt_fidelity:
+    description: >
+      Does the model satisfy explicit countable and spatial constraints? Art direction
+      is largely constraints, so a model that renders beautifully but ignores "three,
+      on the left" costs a human a re-roll every time.
+    scale: "1 = constraints ignored, 3 = roughly half satisfied, 5 = all satisfied"
+
+  text_rendering:
+    description: >
+      Legible, correctly spelled text inside the image. The most common single reason
+      a generated asset cannot ship without manual repair.
+    scale: "1 = unreadable glyphs, 3 = readable with errors, 5 = exact and legible"
+
+  character_consistency:
+    description: >
+      The same character recognisable across separate generations. The hardest
+      requirement for any narrative, storyboard or series use, and the one most
+      likely to decide whether a model is usable in a pipeline at all.
+    scale: "1 = unrelated subjects, 3 = same type, different individual, 5 = same individual"
+
+  style_adherence:
+    description: >
+      Holding a specified visual style rather than drifting to the model's own
+      default aesthetic. Measured across a set, not a single image.
+    scale: "1 = ignores style, 3 = partial, 5 = holds style across the set"
+
+prompts:
+  # ---- prompt_fidelity -------------------------------------------------------
+  - id: pf_01
+    axis: prompt_fidelity
+    prompt: >
+      Three ceramic coffee cups on a wooden table, viewed from the front. The tallest
+      cup is on the left, the shortest on the right. Exactly one cup is red.
+    checks:
+      - "exactly three cups present"
+      - "tallest cup is leftmost"
+      - "shortest cup is rightmost"
+      - "exactly one cup is red"
+
+  - id: pf_02
+    axis: prompt_fidelity
+    prompt: >
+      A single orange cat sitting on a closed blue suitcase. The suitcase is on grass.
+      No other animals or objects in frame.
+    checks:
+      - "exactly one cat"
+      - "cat is orange"
+      - "suitcase is blue and closed"
+      - "no extra animals or objects"
+
+  - id: pf_03
+    axis: prompt_fidelity
+    prompt: >
+      An empty wooden chair facing away from the camera, in the centre of an otherwise
+      bare room. One window on the right-hand wall.
+    checks:
+      - "chair faces away from camera"
+      - "chair is centred"
+      - "exactly one window, on the right"
+      - "room is otherwise bare"
+
+  # ---- text_rendering --------------------------------------------------------
+  - id: tr_01
+    axis: text_rendering
+    prompt: >
+      A vintage enamel shop sign on a brick wall reading exactly: OPEN DAILY 7-5.
+      Clean sans-serif capitals, high contrast.
+    checks:
+      - "text reads exactly 'OPEN DAILY 7-5'"
+      - "all characters legible"
+      - "no duplicated or invented extra words"
+
+  - id: tr_02
+    axis: text_rendering
+    prompt: >
+      A paperback book cover on a plain background. The title reads exactly
+      'THE LONG AFTERNOON' and below it, smaller, the word 'NOVEL'.
+    checks:
+      - "title reads exactly 'THE LONG AFTERNOON'"
+      - "subtitle reads exactly 'NOVEL'"
+      - "spelling correct in both"
+
+  - id: tr_03
+    axis: text_rendering
+    prompt: >
+      A hand-lettered chalkboard menu with three lines reading exactly:
+      SOUP 4, BREAD 2, TEA 3.
+    checks:
+      - "all three lines present"
+      - "numbers correct: 4, 2, 3"
+      - "words spelled correctly"
+
+  # ---- character_consistency -------------------------------------------------
+  # The same character described identically across three scenes. Scored as a set:
+  # the question is whether the three images show one individual or three strangers
+  # who happen to match the description.
+  - id: cc_01
+    axis: character_consistency
+    consistency_group: fox_courier
+    prompt: >
+      Character sheet reference: a young fox courier with a torn left ear, a green
+      canvas satchel and a red scarf. Flat 2D animation style, neutral grey
+      background, standing facing the camera.
+    checks:
+      - "torn left ear present"
+      - "green satchel present"
+      - "red scarf present"
+
+  - id: cc_02
+    axis: character_consistency
+    consistency_group: fox_courier
+    prompt: >
+      The same young fox courier with a torn left ear, green canvas satchel and red
+      scarf, now running across a rooftop at dusk. Flat 2D animation style.
+    checks:
+      - "same individual as cc_01 (markings, proportions, palette)"
+      - "torn left ear, satchel and scarf all carried over"
+
+  - id: cc_03
+    axis: character_consistency
+    consistency_group: fox_courier
+    prompt: >
+      The same young fox courier with a torn left ear, green canvas satchel and red
+      scarf, now sitting on a windowsill reading a letter. Flat 2D animation style.
+    checks:
+      - "same individual as cc_01 and cc_02"
+      - "torn left ear, satchel and scarf all carried over"
+
+  # ---- style_adherence -------------------------------------------------------
+  - id: sa_01
+    axis: style_adherence
+    style_group: gouache_storybook
+    prompt: >
+      A lighthouse on a cliff in heavy weather. Muted gouache storybook illustration,
+      visible brush texture, limited palette of slate blue, cream and burnt orange,
+      soft edges, no digital gloss.
+    checks:
+      - "visible brush/gouache texture"
+      - "palette limited to slate blue, cream, burnt orange"
+      - "not photorealistic or glossy-digital"
+
+  - id: sa_02
+    axis: style_adherence
+    style_group: gouache_storybook
+    prompt: >
+      A fishing boat returning to a small harbour at dawn. Muted gouache storybook
+      illustration, visible brush texture, limited palette of slate blue, cream and
+      burnt orange, soft edges, no digital gloss.
+    checks:
+      - "same gouache treatment as sa_01"
+      - "palette held"
+      - "reads as the same illustrated world"
+
+  - id: sa_03
+    axis: style_adherence
+    style_group: gouache_storybook
+    prompt: >
+      A row of terraced houses under rain. Muted gouache storybook illustration,
+      visible brush texture, limited palette of slate blue, cream and burnt orange,
+      soft edges, no digital gloss.
+    checks:
+      - "same gouache treatment as sa_01 and sa_02"
+      - "palette held"
+      - "no drift toward photorealism"
