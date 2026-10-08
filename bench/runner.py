@@ -20,15 +20,23 @@ from pathlib import Path
 import httpx
 import yaml
 
-from .providers import BaseProvider, GenerationResult, COST_PER_IMAGE, load_available
+from .providers import (
+    BaseProvider,
+    GenerationResult,
+    COST_PER_IMAGE,
+    extension_for,
+    load_available,
+)
 
 REQUEST_TIMEOUT = httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=10.0)
 MAX_ATTEMPTS = 3
-RETRYABLE = {"rate_limit", "timeout", "http"}
+# payment_required is retryable on evidence: Pollinations' x402 gate is driven by
+# request rate, and backoff recovered 3 of 12 outputs in run 20261008-162624.
+RETRYABLE = {"rate_limit", "payment_required", "timeout", "http"}
 
 
 def load_prompts(config_path: Path, axis: str | None = None) -> tuple[dict, list[dict]]:
-    with config_path.open() as fh:
+    with config_path.open(encoding="utf-8") as fh:
         cfg = yaml.safe_load(fh)
     prompts = cfg["prompts"]
     if axis:
@@ -43,30 +51,39 @@ async def _attempt(
     client: httpx.AsyncClient,
     prompt_spec: dict,
     repeat: int,
+    blind_id: str,
     images_dir: Path,
 ) -> GenerationResult:
     prompt_id = prompt_spec["id"]
     prompt_text = " ".join(prompt_spec["prompt"].split())
 
     last_kind, last_detail = "unknown", "no attempt made"
+    attempts_made = 0
     for attempt in range(1, MAX_ATTEMPTS + 1):
+        attempts_made = attempt
         started = time.perf_counter()
         try:
-            data = await provider.generate(client, prompt_text)
+            data, content_type = await provider.generate(client, prompt_text)
             latency = time.perf_counter() - started
 
-            filename = f"{provider.name}__{prompt_id}__r{repeat}.png"
+            # The blind id IS the filename: nothing on disk names the provider.
+            filename = f"{blind_id}{extension_for(content_type)}"
             (images_dir / filename).write_bytes(data)
 
             return GenerationResult(
                 provider=provider.name,
                 prompt_id=prompt_id,
                 repeat=repeat,
+                blind_id=blind_id,
                 ok=True,
                 latency_s=round(latency, 3),
                 cost_usd=COST_PER_IMAGE.get(provider.name, 0.0),
                 image_path=f"images/{filename}",
-                meta={"attempts": attempt, "bytes": len(data)},
+                meta={
+                    "attempts": attempt,
+                    "bytes": len(data),
+                    "content_type": content_type.split(";")[0].strip(),
+                },
             )
         except Exception as exc:  # noqa: BLE001 - classified below, never swallowed
             latency = time.perf_counter() - started
@@ -86,11 +103,12 @@ async def _attempt(
         provider=provider.name,
         prompt_id=prompt_id,
         repeat=repeat,
+        blind_id=blind_id,
         ok=False,
         latency_s=round(latency, 3),
         error_kind=last_kind,
         error_detail=last_detail,
-        meta={"attempts": MAX_ATTEMPTS if last_kind in RETRYABLE else 1},
+        meta={"attempts": attempts_made},
     )
 
 
@@ -107,7 +125,8 @@ async def _run_provider(
 
         async def one(spec: dict, repeat: int) -> None:
             async with sem:
-                res = await _attempt(provider, client, spec, repeat, images_dir)
+                blind_id = uuid.uuid4().hex[:10]
+                res = await _attempt(provider, client, spec, repeat, blind_id, images_dir)
                 status = "ok" if res.ok else f"FAIL({res.error_kind})"
                 print(f"  {provider.name:<20} {spec['id']} r{repeat}  {res.latency_s:>6.2f}s  {status}")
                 results.append(res)
@@ -120,25 +139,13 @@ async def _run_provider(
 
 
 def build_blind_map(results: list[GenerationResult]) -> dict[str, dict]:
-    """Assign an opaque id to every successful output.
+    """Collect the blind id -> provider mapping for every successful output.
 
-    The scorer is handed only these ids. The mapping back to provider names is written
-    to a separate file that the scoring step never reads, so the person scoring cannot
-    see which model produced what even if they are the same person who ran the
-    benchmark. This is the one design decision the whole project rests on.
+    Ids are minted at generation time and used as the image filenames, so this
+    file is the only artifact that knows which provider produced what. Nothing
+    the scorer reads carries both a blind id and a provider name.
     """
-    blind: dict[str, dict] = {}
-    for res in results:
-        if not res.ok:
-            continue
-        blind_id = uuid.uuid4().hex[:10]
-        blind[blind_id] = {
-            "provider": res.provider,
-            "prompt_id": res.prompt_id,
-            "repeat": res.repeat,
-            "image_path": res.image_path,
-        }
-    return blind
+    return {res.blind_id: res.to_blind_entry() for res in results if res.ok}
 
 
 async def run(
@@ -183,12 +190,15 @@ async def run(
                 "axes": axes,
                 "prompts": prompts,
                 "repeats": repeats,
-                "results": [r.to_dict() for r in all_results],
+                "results": [r.to_results_row() for r in all_results],
             },
             indent=2,
-        )
+        ),
+        encoding="utf-8",
     )
-    (run_dir / "blind_map.json").write_text(json.dumps(blind_map, indent=2))
+    (run_dir / "blind_map.json").write_text(
+        json.dumps(blind_map, indent=2), encoding="utf-8"
+    )
 
     ok = sum(1 for r in all_results if r.ok)
     print(f"\n  {ok}/{len(all_results)} succeeded")

@@ -6,6 +6,7 @@ self-contained HTML file: a summary table plus a prompt-by-provider image grid.
 
 from __future__ import annotations
 
+import html
 import json
 import statistics
 from collections import defaultdict
@@ -17,16 +18,21 @@ def _mean(values: list[float]) -> float | None:
 
 
 def build_report(run_dir: Path) -> Path:
-    payload = json.loads((run_dir / "results.json").read_text())
-    blind_map = json.loads((run_dir / "blind_map.json").read_text())
+    payload = json.loads((run_dir / "results.json").read_text(encoding="utf-8"))
+    blind_map = json.loads((run_dir / "blind_map.json").read_text(encoding="utf-8"))
 
     scores_path = run_dir / "scores.json"
-    scores = json.loads(scores_path.read_text()) if scores_path.exists() else {}
+    scores = json.loads(scores_path.read_text(encoding="utf-8")) if scores_path.exists() else {}
     if not scores:
         print("  note: no scores.json — report will show operational metrics only")
 
     results = payload["results"]
     prompts = payload["prompts"]
+    # results.json no longer carries image_path; the blind map is the only join.
+    image_paths = {
+        (rec["provider"], rec["prompt_id"], rec["repeat"]): rec["image_path"]
+        for rec in blind_map.values()
+    }
     prompts_by_id = {p["id"]: p for p in prompts}
     providers = sorted({r["provider"] for r in results})
 
@@ -51,6 +57,9 @@ def build_report(run_dir: Path) -> Path:
                 if latencies else None
             ),
             "est_cost_usd": round(sum(r["cost_usd"] for r in ok_rows), 4),
+            "formats": sorted(
+                {r["meta"]["content_type"] for r in ok_rows if r["meta"].get("content_type")}
+            ),
             "failures": dict(failure_kinds),
         }
 
@@ -73,9 +82,12 @@ def build_report(run_dir: Path) -> Path:
         ops[provider]["overall_score"] = _mean(all_scores)
         ops[provider]["n_scored"] = len(all_scores)
 
-    (run_dir / "summary.json").write_text(json.dumps(ops, indent=2))
+    (run_dir / "summary.json").write_text(json.dumps(ops, indent=2), encoding="utf-8")
     html_path = run_dir / "report.html"
-    html_path.write_text(_render_html(payload, ops, providers, axes, prompts, score_by_image))
+    html_path.write_text(
+        _render_html(payload, ops, providers, axes, prompts, score_by_image, image_paths),
+        encoding="utf-8",
+    )
 
     # Console summary so the numbers are visible without opening the file.
     print(f"\n  {'provider':<22}{'ok%':>7}{'med s':>8}{'score':>8}  failures")
@@ -92,7 +104,10 @@ def build_report(run_dir: Path) -> Path:
     return html_path
 
 
-def _render_html(payload, ops, providers, axes, prompts, score_by_image) -> str:
+def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_paths) -> str:
+    def esc(value) -> str:
+        return html.escape(str(value), quote=True)
+
     def cell(provider: str, prompt_id: str) -> str:
         match = next(
             (
@@ -105,23 +120,25 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image) -> str:
             return '<td class="miss">—</td>'
         if not match["ok"]:
             return (
-                f'<td class="fail"><span class="tag">{match["error_kind"]}</span>'
-                f'<div class="detail">{(match["error_detail"] or "")[:120]}</div></td>'
+                f'<td class="fail"><span class="tag">{esc(match["error_kind"])}</span>'
+                f'<div class="detail">{esc((match["error_detail"] or "")[:160])}</div></td>'
             )
+        src = image_paths.get((provider, prompt_id, 1))
         entry = score_by_image.get((provider, prompt_id))
         badge = f'<span class="score">{entry["score"]}/5</span>' if entry else ""
-        note = f'<div class="detail">{entry["note"]}</div>' if entry and entry.get("note") else ""
+        note = f'<div class="detail">{esc(entry["note"])}</div>' if entry and entry.get("note") else ""
         return (
-            f'<td><img src="{match["image_path"]}" loading="lazy" alt="">'
+            f'<td><img src="{esc(src)}" loading="lazy" alt="">'
             f'<div class="meta">{match["latency_s"]:.1f}s {badge}</div>{note}</td>'
         )
 
     summary_rows = "".join(
-        f"<tr><td class='name'>{p}</td>"
+        f"<tr><td class='name'>{esc(p)}</td>"
         f"<td>{ops[p]['succeeded']}/{ops[p]['attempts']} ({ops[p]['success_rate']}%)</td>"
         f"<td>{ops[p]['median_latency_s'] if ops[p]['median_latency_s'] is not None else '—'}</td>"
         f"<td>{ops[p]['p90_latency_s'] if ops[p]['p90_latency_s'] is not None else '—'}</td>"
         f"<td>${ops[p]['est_cost_usd']}</td>"
+        f"<td>{esc(', '.join(ops[p]['formats'])) or '—'}</td>"
         + "".join(
             f"<td>{ops[p]['axis_scores'].get(a) or '—'}</td>"
             for a in axes
@@ -133,18 +150,18 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image) -> str:
     grid_rows = ""
     for axis in axes:
         axis_prompts = [p for p in prompts if p["axis"] == axis]
-        grid_rows += f'<tr class="axis-row"><td colspan="{len(providers) + 1}">{axis}</td></tr>'
+        grid_rows += f'<tr class="axis-row"><td colspan="{len(providers) + 1}">{esc(axis)}</td></tr>'
         for spec in axis_prompts:
             prompt_text = " ".join(spec["prompt"].split())
             grid_rows += (
-                f'<tr><td class="prompt"><strong>{spec["id"]}</strong>'
-                f'<div class="detail">{prompt_text}</div></td>'
+                f'<tr><td class="prompt"><strong>{esc(spec["id"])}</strong>'
+                f'<div class="detail">{esc(prompt_text)}</div></td>'
                 + "".join(cell(p, spec["id"]) for p in providers)
                 + "</tr>"
             )
 
-    axis_headers = "".join(f"<th>{a}</th>" for a in axes)
-    provider_headers = "".join(f"<th>{p}</th>" for p in providers)
+    axis_headers = "".join(f"<th>{esc(a)}</th>" for a in axes)
+    provider_headers = "".join(f"<th>{esc(p)}</th>" for p in providers)
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -187,7 +204,7 @@ scored blind, unblinded at report time</div>
 
 <h2>Summary</h2>
 <table><thead><tr><th>provider</th><th>success</th><th>median latency</th>
-<th>p90 latency</th><th>est. cost</th>{axis_headers}<th>overall</th></tr></thead>
+<th>p90 latency</th><th>est. cost</th><th>format</th>{axis_headers}<th>overall</th></tr></thead>
 <tbody>{summary_rows}</tbody></table>
 
 <h2>Outputs</h2>

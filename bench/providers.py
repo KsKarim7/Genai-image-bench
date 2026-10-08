@@ -8,8 +8,10 @@ one class; the runner, scorer and report never learn provider-specific details.
 from __future__ import annotations
 
 import base64
+import json
+import mimetypes
 import os
-import time
+import urllib.parse
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
@@ -29,6 +31,7 @@ class GenerationResult:
     provider: str
     prompt_id: str
     repeat: int
+    blind_id: str
     ok: bool
     latency_s: float
     cost_usd: float = 0.0
@@ -37,12 +40,57 @@ class GenerationResult:
     # a rate limit is an operational problem, a refusal is a content-policy
     # problem, a parse error is an integration problem. Collapsing them into
     # "failed" throws away the distinction a pipeline decision depends on.
-    error_kind: Optional[str] = None     # rate_limit | timeout | refused | parse | http | unknown
+    error_kind: Optional[str] = None     # rate_limit | payment_required | timeout | refused | parse | http | unknown
     error_detail: Optional[str] = None
     meta: dict = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
-        return asdict(self)
+    # results.json is the one run artifact the scoring module reads, so it must
+    # carry no field that maps a blind id back to a provider.
+    _UNBLINDING = ("blind_id", "image_path")
+
+    def to_results_row(self) -> dict:
+        return {k: v for k, v in asdict(self).items() if k not in self._UNBLINDING}
+
+    def to_blind_entry(self) -> dict:
+        return {
+            "provider": self.provider,
+            "prompt_id": self.prompt_id,
+            "repeat": self.repeat,
+            "image_path": self.image_path,
+        }
+
+
+# An explicit map because mimetypes reads the Windows registry and can hand back
+# .jpe for image/jpeg; committed artifacts need the same filenames on every box.
+_EXTENSIONS = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+
+
+def extension_for(content_type: str) -> str:
+    base = (content_type or "").split(";")[0].strip().lower()
+    return _EXTENSIONS.get(base) or mimetypes.guess_extension(base) or ".bin"
+
+
+def _payment_detail(response: httpx.Response) -> str:
+    """x402 sends an empty JSON body; the challenge rides in a base64 header."""
+    header = response.headers.get("payment-required")
+    if not header:
+        return response.text[:200] or "no body"
+    try:
+        challenge = json.loads(base64.b64decode(header + "=" * (-len(header) % 4)))
+    except Exception:
+        return f"undecodable payment-required header ({len(header)} bytes)"
+    accepts = (challenge.get("accepts") or [{}])[0]
+    asset = accepts.get("extra", {}).get("name") or accepts.get("asset", "?")
+    return (
+        f"{challenge.get('error', 'payment required')} - "
+        f"{accepts.get('amount', '?')} {asset} on {accepts.get('network', '?')} "
+        f"for {challenge.get('resource', {}).get('serviceName', 'resource')}"
+    )
 
 
 class ProviderUnavailable(Exception):
@@ -57,8 +105,8 @@ class BaseProvider:
     def available(self) -> bool:
         return True
 
-    async def generate(self, client: httpx.AsyncClient, prompt: str) -> bytes:
-        """Return raw image bytes, or raise. Subclasses implement."""
+    async def generate(self, client: httpx.AsyncClient, prompt: str) -> tuple[bytes, str]:
+        """Return (image bytes, content-type), or raise. Subclasses implement."""
         raise NotImplementedError
 
     @staticmethod
@@ -70,6 +118,8 @@ class BaseProvider:
             code = exc.response.status_code
             if code == 429:
                 return "rate_limit", f"HTTP 429: {exc.response.text[:200]}"
+            if code == 402:
+                return "payment_required", f"HTTP 402: {_payment_detail(exc.response)}"
             if code in (400, 403) and "safety" in exc.response.text.lower():
                 return "refused", exc.response.text[:200]
             return "http", f"HTTP {code}: {exc.response.text[:200]}"
@@ -95,7 +145,7 @@ class GeminiFlashImage(BaseProvider):
     def available(self) -> bool:
         return bool(self.api_key)
 
-    async def generate(self, client: httpx.AsyncClient, prompt: str) -> bytes:
+    async def generate(self, client: httpx.AsyncClient, prompt: str) -> tuple[bytes, str]:
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{self.model_id}:generateContent"
@@ -117,7 +167,8 @@ class GeminiFlashImage(BaseProvider):
         for part in candidates[0].get("content", {}).get("parts", []):
             inline = part.get("inlineData") or part.get("inline_data")
             if inline and inline.get("data"):
-                return base64.b64decode(inline["data"])
+                mime = inline.get("mimeType") or inline.get("mime_type") or "image/png"
+                return base64.b64decode(inline["data"]), mime
 
         finish = candidates[0].get("finishReason", "unknown")
         raise ValueError(f"no inline image part in response (finishReason={finish})")
@@ -131,11 +182,16 @@ class Pollinations(BaseProvider):
     """
 
     name = "pollinations"
-    max_concurrency = 2
+    # Measured: 6 simultaneous requests gave 5x HTTP 402 and one timeout, zero
+    # successes; the same prompts sequentially succeed. The gate is on rate.
+    max_concurrency = 1
 
-    async def generate(self, client: httpx.AsyncClient, prompt: str) -> bytes:
+    async def generate(self, client: httpx.AsyncClient, prompt: str) -> tuple[bytes, str]:
+        # quote(safe="") and not httpx.URL(path=...): the latter leaves "/"
+        # unescaped so a prompt can inject path segments, and raises InvalidURL
+        # on "?" or "#".
         resp = await client.get(
-            f"https://image.pollinations.ai/prompt/{httpx.URL(path=prompt).path.lstrip('/')}",
+            "https://image.pollinations.ai/prompt/" + urllib.parse.quote(prompt, safe=""),
             params={"nologo": "true"},
             follow_redirects=True,
         )
@@ -143,7 +199,7 @@ class Pollinations(BaseProvider):
         content_type = resp.headers.get("content-type", "")
         if not content_type.startswith("image/"):
             raise ValueError(f"expected image bytes, got content-type={content_type!r}")
-        return resp.content
+        return resp.content, content_type
 
 
 class HuggingFaceInference(BaseProvider):
@@ -163,7 +219,7 @@ class HuggingFaceInference(BaseProvider):
     def available(self) -> bool:
         return bool(self.token)
 
-    async def generate(self, client: httpx.AsyncClient, prompt: str) -> bytes:
+    async def generate(self, client: httpx.AsyncClient, prompt: str) -> tuple[bytes, str]:
         resp = await client.post(
             f"https://api-inference.huggingface.co/models/{self.model}",
             headers={"Authorization": f"Bearer {self.token}"},
@@ -172,9 +228,10 @@ class HuggingFaceInference(BaseProvider):
         if resp.status_code == 503:
             raise ValueError("model cold-starting (HTTP 503) — retry shortly")
         resp.raise_for_status()
-        if not resp.headers.get("content-type", "").startswith("image/"):
+        content_type = resp.headers.get("content-type", "")
+        if not content_type.startswith("image/"):
             raise ValueError(f"expected image bytes, got: {resp.text[:200]}")
-        return resp.content
+        return resp.content, content_type
 
 
 ALL_PROVIDERS: list[type[BaseProvider]] = [

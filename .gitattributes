@@ -1,0 +1,8 @@
+# core.autocrlf=true was rewriting source line endings per-checkout; pin them.
+* text=auto eol=lf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.gif  binary
