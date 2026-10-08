@@ -64,6 +64,14 @@ quality score hides that.
 **Cost and latency are recorded per request.** A model that is 8% better at 20x the
 cost is not better for most pipeline work.
 
+**The per-axis scores are the result.** The `overall` column is an unweighted mean
+across the four axes, present as a summary and nothing more. It deliberately does not
+weight by prompt count: prompt fidelity and text rendering have three prompts each
+while the grouped axes resolve to one scored set, and that ratio is a fact about how
+the suite was written rather than about the models. An aggregate also hides the
+per-axis differences this comparison exists to surface, so a reader scanning the one
+number is reading the wrong column.
+
 ## Blinding, and how the first implementation broke it
 
 The first version stripped the provider field out of the data structure handed to the
@@ -136,9 +144,6 @@ demonstrably easy to break by accident; a careful read had already missed it twi
   rubric text reaches the scorer. That is a weaker join back to `results.json` than
   the ones closed above, and it is left in place because pass criteria are fixed
   before the run and are not reworded mid-flight.
-- Hugging Face returns HTTP 503 while a model cold-starts. That is classified as an
-  integration error rather than a transient one, so it is not retried even though
-  the message says to retry. Cold starts need their own retry budget; not done.
 - Blind ids are 40 bits of UUID4 and run ids have one-second resolution. A collision
   in either would silently overwrite data rather than fail. Negligible at this scale
   and not guarded.
@@ -243,3 +248,13 @@ run.py               entry point
 Image APIs change shape often. Each adapter isolates one provider's request and
 response handling behind `generate()`, so a breaking change touches one class. If a
 provider starts failing with parse errors, that adapter is where to look.
+
+That was tested during this build rather than assumed. Gemini 3.1 moved image
+generation off `models/{id}:generateContent` onto `/v1beta/interactions`, with a
+different request body and a different place for the image bytes, and the change was
+contained to one class.
+
+A Hugging Face adapter was also written and then removed. It had never executed
+against the real API, and untested code in a project about measurement validity is
+the wrong thing to ship -- the same reasoning that removed `--repeats` rather than
+finishing it. Adding a provider back is one class.

@@ -39,6 +39,7 @@ def load_prompts(config_path: Path, axis: str | None = None) -> tuple[dict, list
     with config_path.open(encoding="utf-8") as fh:
         cfg = yaml.safe_load(fh)
     axes, prompts = cfg["axes"], cfg["prompts"]
+    groups = cfg.get("groups") or {}
 
     # Fail here, not part-way through a scoring session.
     missing = [name for name, spec in axes.items() if not spec.get("anchors")]
@@ -48,11 +49,25 @@ def load_prompts(config_path: Path, axis: str | None = None) -> tuple[dict, list
     if undeclared:
         raise SystemExit(f"prompts name undeclared axes: {', '.join(undeclared)}")
 
+    used = {g for p in prompts if (g := _group_key(p))}
+    unknown = sorted(used - set(groups))
+    if unknown:
+        raise SystemExit(f"prompts name undeclared groups: {', '.join(unknown)}")
+    for name in sorted(used):
+        if not groups[name].get("checks"):
+            raise SystemExit(f"group {name!r} declares no checks")
+        declared = groups[name].get("axis")
+        members = {p["axis"] for p in prompts if _group_key(p) == name}
+        if declared and members != {declared}:
+            raise SystemExit(
+                f"group {name!r} declares axis {declared!r} but its prompts use {sorted(members)}"
+            )
+
     if axis:
         prompts = [p for p in prompts if p["axis"] == axis]
         if not prompts:
             raise SystemExit(f"no prompts found for axis {axis!r}")
-    return axes, prompts
+    return {"axes": axes, "groups": groups}, prompts
 
 
 async def _attempt(
@@ -227,13 +242,15 @@ def build_blind_map(units: list[dict]) -> dict[str, dict]:
 
 
 def build_scoring_manifest(
-    run_id: str, axes: dict, prompts: list[dict], units: list[dict]
+    run_id: str, config: dict, prompts: list[dict], units: list[dict]
 ) -> dict:
     """The scorer's only input.
 
     Carries no provider and nothing that joins to one: no bytes, no latency, no
-    content type, no prompt id. One entry per scoring decision.
+    content type, no prompt id. One entry per scoring decision, with set-level
+    criteria stated once rather than repeated under each member.
     """
+    axes, groups = config["axes"], config["groups"]
     specs = {p["id"]: p for p in prompts}
     return {
         "run_id": run_id,
@@ -242,11 +259,12 @@ def build_scoring_manifest(
                 "unit_id": u["unit_id"],
                 "axis": u["axis"],
                 "anchors": axes[u["axis"]]["anchors"],
+                "set_checks": (groups.get(u["group"]) or {}).get("checks", []),
                 "images": [res.image_path for res in u["members"]],
                 "prompts": [
                     {
                         "prompt": " ".join(specs[res.prompt_id]["prompt"].split()),
-                        "checks": specs[res.prompt_id]["checks"],
+                        "checks": specs[res.prompt_id].get("checks") or [],
                     }
                     for res in u["members"]
                 ],
@@ -257,7 +275,7 @@ def build_scoring_manifest(
 
 
 async def run(config_path: Path, runs_dir: Path, axis: str | None = None) -> str:
-    axes, prompts = load_prompts(config_path, axis)
+    config, prompts = load_prompts(config_path, axis)
 
     providers = load_available()
     if not providers:
@@ -293,7 +311,7 @@ async def run(config_path: Path, runs_dir: Path, axis: str | None = None) -> str
             {
                 "run_id": run_id,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
-                "axes": axes,
+                "axes": config["axes"],
                 "prompts": prompts,
                 "results": [r.to_results_row() for r in all_results],
             },
@@ -305,7 +323,7 @@ async def run(config_path: Path, runs_dir: Path, axis: str | None = None) -> str
         json.dumps(blind_map, indent=2), encoding="utf-8"
     )
     (run_dir / "scoring_manifest.json").write_text(
-        json.dumps(build_scoring_manifest(run_id, axes, prompts, units), indent=2),
+        json.dumps(build_scoring_manifest(run_id, config, prompts, units), indent=2),
         encoding="utf-8",
     )
 

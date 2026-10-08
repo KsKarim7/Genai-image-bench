@@ -23,7 +23,6 @@ LIST_PRICE_USD_PER_IMAGE = {
     "gemini-3.1-flash-lite-image": 0.0336,
     "gemini-3.1-flash-image": 0.067,
     "pollinations": 0.0,
-    "huggingface": 0.0,
 }
 
 
@@ -289,45 +288,10 @@ class Pollinations(BaseProvider):
         )
 
 
-# TODO: HF has never run -- no token configured, and its 503 cold start is not
-# retried. Decide whether it belongs in the roster or should come out.
-class HuggingFaceInference(BaseProvider):
-    """Hugging Face Inference API; model set by HF_IMAGE_MODEL.
-
-    503 means a cold start. Surfaced rather than waited out, and not retried -- see
-    the README limitations.
-    """
-
-    name = "huggingface"
-    max_concurrency = 1
-
-    def __init__(self) -> None:
-        self.token = os.getenv("HF_TOKEN", "").strip()
-        self.model = os.getenv("HF_IMAGE_MODEL", "stabilityai/stable-diffusion-xl-base-1.0")
-
-    def available(self) -> bool:
-        return bool(self.token)
-
-    async def generate(self, client: httpx.AsyncClient, prompt: str) -> GeneratedImage:
-        resp = await client.post(
-            f"https://api-inference.huggingface.co/models/{self.model}",
-            headers={"Authorization": f"Bearer {self.token}"},
-            json={"inputs": prompt},
-        )
-        if resp.status_code == 503:
-            raise ValueError("model cold-starting (HTTP 503) — retry shortly")
-        resp.raise_for_status()
-        content_type = resp.headers.get("content-type", "")
-        if not content_type.startswith("image/"):
-            raise ValueError(f"expected image bytes, got: {resp.text[:200]}")
-        return GeneratedImage(resp.content, content_type, {"model": self.model})
-
-
 ALL_PROVIDERS: list[type[BaseProvider]] = [
     GeminiFlashLiteImage,
     GeminiFlashImage,
     Pollinations,
-    HuggingFaceInference,
 ]
 
 

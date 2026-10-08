@@ -25,7 +25,10 @@ _VIEW_CSS = """
          margin:0; padding:28px; background:#17171a; color:#ececea; }
   h1 { font-size:14px; text-transform:uppercase; letter-spacing:.08em;
        color:#9a9a95; margin:0 0 6px; }
-  .anchors { color:#9a9a95; font-size:13px; margin-bottom:22px; }
+  .anchors { color:#9a9a95; font-size:13px; margin-bottom:18px; }
+  .setchecks { border:1px solid #2e2e32; border-radius:6px; padding:12px 16px;
+               margin-bottom:22px; }
+  .setchecks ul { margin:0; padding-left:18px; color:#c9c9c4; font-size:13px; }
   .grid { display:flex; flex-wrap:wrap; gap:22px; align-items:flex-start; }
   figure { margin:0; max-width:380px; }
   img { width:100%; border-radius:6px; display:block; background:#000; }
@@ -57,6 +60,14 @@ def _view_html(unit: dict, run_dir: Path) -> str:
     """Images carry no suffix on disk, so they are shown through <img>, which
     sniffs the bytes instead of trusting a filename."""
     total = len(unit["images"])
+    set_checks = unit.get("set_checks") or []
+    set_block = ""
+    if set_checks:
+        items = "".join(f"<li>{html.escape(c)}</li>" for c in set_checks)
+        set_block = (
+            f'<div class="setchecks"><b>criteria for the whole set</b>'
+            f"<ul>{items}</ul></div>"
+        )
     cards = []
     for index, (rel, spec) in enumerate(zip(unit["images"], unit["prompts"]), 1):
         uri = (run_dir / rel).resolve().as_uri()
@@ -74,7 +85,8 @@ def _view_html(unit: dict, run_dir: Path) -> str:
         "<style>" + _VIEW_CSS + "</style></head><body>"
         f"<h1>{html.escape(unit['axis'])}</h1>"
         f"<div class=\"anchors\">{html.escape(unit['anchors'])}</div>"
-        f"<div class=\"grid\">{''.join(cards)}</div>"
+        + set_block
+        + f"<div class=\"grid\">{''.join(cards)}</div>"
         "</body></html>"
     )
 
@@ -107,8 +119,12 @@ def score_run(run_dir: Path, open_images: bool = True) -> None:
             print()
             print(f"[{index}/{len(remaining)}]  unit {unit['unit_id']}"
                   + (f"  ({total} images, scored as a set)" if total > 1 else ""))
-            print(f"  axis:   {unit['axis']}")
+            print(f"  axis:    {unit['axis']}")
             print(f"  anchors: {unit['anchors']}")
+            if unit.get("set_checks"):
+                print("  criteria for the whole set:")
+                for check in unit["set_checks"]:
+                    print(f"    - {check}")
             for spec in unit["prompts"]:
                 print(f"  prompt: {spec['prompt']}")
                 for check in spec["checks"]:

@@ -33,8 +33,9 @@ JOIN_KEYS = ("bytes", "latency", "content_type", "prompt_id", "provider", "x_cac
 
 
 def _load_suite():
+    """Same shape load_prompts returns: the config bundle, then the prompts."""
     cfg = yaml.safe_load((ROOT / "config" / "prompts.yaml").read_text(encoding="utf-8"))
-    return cfg["axes"], cfg["prompts"]
+    return {"axes": cfg["axes"], "groups": cfg.get("groups") or {}}, cfg["prompts"]
 
 
 def _fake_results(prompts):
@@ -70,7 +71,7 @@ def _fake_results(prompts):
 
 
 def _make_run(root: Path):
-    axes, prompts = _load_suite()
+    config, prompts = _load_suite()
     results = _fake_results(prompts)
     units = build_units(prompts, results)
 
@@ -88,7 +89,7 @@ def _make_run(root: Path):
             {
                 "run_id": run_dir.name,
                 "generated_at": "2026-01-01T00:00:00+00:00",
-                "axes": axes,
+                "axes": config["axes"],
                 "prompts": prompts,
                 "results": [r.to_results_row() for r in results],
             },
@@ -100,7 +101,7 @@ def _make_run(root: Path):
         json.dumps(build_blind_map(units), indent=2), encoding="utf-8"
     )
     (run_dir / "scoring_manifest.json").write_text(
-        json.dumps(build_scoring_manifest(run_dir.name, axes, prompts, units), indent=2),
+        json.dumps(build_scoring_manifest(run_dir.name, config, prompts, units), indent=2),
         encoding="utf-8",
     )
     return run_dir, units
@@ -208,7 +209,7 @@ class ScorerSeesNoProvider(unittest.TestCase):
 
 class UnitGrouping(unittest.TestCase):
     def setUp(self):
-        self.axes, self.prompts = _load_suite()
+        self.config, self.prompts = _load_suite()
         self.results = _fake_results(self.prompts)
         self.units = build_units(self.prompts, self.results)
 
@@ -240,6 +241,45 @@ class UnitGrouping(unittest.TestCase):
     def test_unit_ids_are_unique(self):
         ids = [u["unit_id"] for u in self.units]
         self.assertEqual(len(ids), len(set(ids)))
+
+
+class SetCriteriaStatedOnce(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        run_dir, _ = _make_run(Path(tmp.name))
+        self.units = json.loads(
+            (run_dir / "scoring_manifest.json").read_text(encoding="utf-8")
+        )["units"]
+
+    def test_grouped_units_carry_set_checks(self):
+        grouped = [u for u in self.units if len(u["images"]) > 1]
+        self.assertTrue(grouped, "fixture should produce at least one multi-image unit")
+        for unit in grouped:
+            self.assertTrue(unit["set_checks"])
+
+    def test_ungrouped_units_have_no_set_checks(self):
+        for unit in self.units:
+            if unit["axis"] in ("prompt_fidelity", "text_rendering"):
+                self.assertEqual(unit["set_checks"], [])
+
+    def test_no_set_check_is_repeated_under_a_member_prompt(self):
+        for unit in self.units:
+            for spec in unit["prompts"]:
+                overlap = set(spec["checks"]) & set(unit["set_checks"])
+                self.assertFalse(overlap, f"duplicated in front of the scorer: {overlap}")
+
+    def test_grouped_members_carry_no_per_prompt_checks(self):
+        for unit in self.units:
+            if unit["set_checks"]:
+                for spec in unit["prompts"]:
+                    self.assertEqual(spec["checks"], [])
+
+    def test_set_checks_name_no_prompt_id(self):
+        import re
+        for unit in self.units:
+            for check in unit["set_checks"]:
+                self.assertIsNone(re.search(r"\b(?:pf|tr|cc|sa)_\d\d\b", check), check)
 
 
 class FilenameIsTheBlindId(unittest.TestCase):

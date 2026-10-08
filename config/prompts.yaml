@@ -12,6 +12,11 @@
 # another prompt by id ("same individual as cc_01"). Grouped outputs are now scored
 # as a set and the scorer never sees a prompt id, so those ids pointed at something
 # invisible. Substance unchanged; the criteria are the same criteria.
+#
+# Structural revision, same date and also pre-scoring: criteria that apply to a whole
+# set moved from each member prompt into the groups block below, stated once. A set is
+# one scoring unit, so repeating a set-level criterion three times in front of the
+# scorer was noise at the moment they need to read carefully.
 
 axes:
   prompt_fidelity:
@@ -39,6 +44,24 @@ axes:
       Holding a specified visual style rather than drifting to the model's own
       default aesthetic. Measured across a set, not a single image.
     anchors: "1 = ignores style, 3 = partial, 5 = holds style across the set"
+
+# Criteria for a whole set, applied once per scoring unit. Member prompts keep only
+# criteria specific to their own image, and these grouped axes have none.
+groups:
+  fox_courier:
+    axis: character_consistency
+    checks:
+      - "all images show the same individual, not merely the same type of animal"
+      - "torn left ear, green canvas satchel and red scarf carried through every image"
+      - "markings, proportions and palette consistent across the set"
+
+  gouache_storybook:
+    axis: style_adherence
+    checks:
+      - "visible brush and gouache texture in every image"
+      - "palette held to slate blue, cream and burnt orange throughout"
+      - "no drift toward photorealism or digital gloss in any image"
+      - "reads as one illustrated world rather than three unrelated pictures"
 
 prompts:
   # ---- prompt_fidelity -------------------------------------------------------
@@ -107,12 +130,8 @@ prompts:
       - "words spelled correctly"
 
   # ---- character_consistency -------------------------------------------------
-  # Scored as a set. Members are presented in the order declared here, so the
-  # character sheet below is always the reference image the other checks refer to.
-  # Style groups have no privileged member, so their checks are order-independent.
-  #
-  # TODO: checks that apply to the whole set are repeated per prompt. If set
-  # scoring stays, group-level checks would say it once.
+  # Scored as a set against the fox_courier checks above. Members are presented in
+  # the order declared here, so the character sheet below is always shown first.
   - id: cc_01
     axis: character_consistency
     consistency_group: fox_courier
@@ -120,10 +139,6 @@ prompts:
       Character sheet reference: a young fox courier with a torn left ear, a green
       canvas satchel and a red scarf. Flat 2D animation style, neutral grey
       background, standing facing the camera.
-    checks:
-      - "torn left ear present"
-      - "green satchel present"
-      - "red scarf present"
 
   - id: cc_02
     axis: character_consistency
@@ -131,9 +146,6 @@ prompts:
     prompt: >
       The same young fox courier with a torn left ear, green canvas satchel and red
       scarf, now running across a rooftop at dusk. Flat 2D animation style.
-    checks:
-      - "same individual as the character-sheet reference in this set (markings, proportions, palette)"
-      - "torn left ear, satchel and scarf all carried over"
 
   - id: cc_03
     axis: character_consistency
@@ -141,9 +153,6 @@ prompts:
     prompt: >
       The same young fox courier with a torn left ear, green canvas satchel and red
       scarf, now sitting on a windowsill reading a letter. Flat 2D animation style.
-    checks:
-      - "same individual as the character-sheet reference and the other images in this set"
-      - "torn left ear, satchel and scarf all carried over"
 
   # ---- style_adherence -------------------------------------------------------
   - id: sa_01
@@ -153,10 +162,6 @@ prompts:
       A lighthouse on a cliff in heavy weather. Muted gouache storybook illustration,
       visible brush texture, limited palette of slate blue, cream and burnt orange,
       soft edges, no digital gloss.
-    checks:
-      - "visible brush/gouache texture"
-      - "palette limited to slate blue, cream, burnt orange"
-      - "not photorealistic or glossy-digital"
 
   - id: sa_02
     axis: style_adherence
@@ -165,10 +170,6 @@ prompts:
       A fishing boat returning to a small harbour at dawn. Muted gouache storybook
       illustration, visible brush texture, limited palette of slate blue, cream and
       burnt orange, soft edges, no digital gloss.
-    checks:
-      - "gouache treatment consistent across the set"
-      - "palette held"
-      - "reads as the same illustrated world"
 
   - id: sa_03
     axis: style_adherence
@@ -177,7 +178,3 @@ prompts:
       A row of terraced houses under rain. Muted gouache storybook illustration,
       visible brush texture, limited palette of slate blue, cream and burnt orange,
       soft edges, no digital gloss.
-    checks:
-      - "gouache treatment consistent across the set"
-      - "palette held"
-      - "no drift toward photorealism"

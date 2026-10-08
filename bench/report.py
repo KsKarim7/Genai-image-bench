@@ -134,9 +134,15 @@ def build_report(run_dir: Path) -> Path:
         # and text_rendering (3 units each) outweigh character_consistency and
         # style_adherence (1 set each) three to one. Mean of axis means would weight
         # the four axes equally. Which is right depends on which axes matter.
-        all_scores = [s for axis in axes for s in by_provider_axis.get((provider, axis), [])]
-        ops[provider]["overall_score"] = _mean(all_scores)
-        ops[provider]["n_scored"] = len(all_scores)
+        # Unweighted mean across axes, not across units. prompt_fidelity and
+        # text_rendering have three units each while the grouped axes have one, and
+        # that ratio is a property of how the suite was written, not of the models.
+        axis_means = [m for m in ops[provider]["axis_scores"].values() if m is not None]
+        ops[provider]["overall_score"] = _mean(axis_means)
+        ops[provider]["axes_scored"] = len(axis_means)
+        ops[provider]["n_scored"] = sum(
+            len(by_provider_axis.get((provider, axis), [])) for axis in axes
+        )
 
     (run_dir / "summary.json").write_text(json.dumps(ops, indent=2), encoding="utf-8")
     html_path = run_dir / "report.html"
@@ -276,7 +282,8 @@ scored blind, unblinded at report time</div>
 <th>p90 latency<br><span class="qual">generated</span></th>
 <th>cache</th>
 <th>cache read<br><span class="qual">CDN, not the model</span></th>
-<th>est. cost</th><th>format</th>{axis_headers}<th>overall</th></tr></thead>
+<th>est. cost</th><th>format</th>{axis_headers}
+<th>overall<br><span class="qual">unweighted mean of the axes</span></th></tr></thead>
 <tbody>{summary_rows}</tbody></table>
 
 <h2>Outputs</h2>
@@ -284,6 +291,10 @@ scored blind, unblinded at report time</div>
 <tbody>{grid_rows}</tbody></table>
 
 <footer>
+The per-axis columns are the result. "overall" is an unweighted mean across the four
+axes, included only as a summary: it weights each axis equally regardless of how many
+prompts the suite happens to contain for it, and an aggregate hides exactly the
+per-axis differences this comparison exists to show.
 Latency columns marked "generated" exclude cache hits; a cache read measures the
 provider's CDN, not the model, so the two are never averaged. A provider that served
 only cache hits has no latency measurement in this run.
