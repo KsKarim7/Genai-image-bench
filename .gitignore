@@ -5,6 +5,9 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# runs/ is intentionally NOT ignored — committed runs are the evidence that the
-# harness was actually executed. If image volume becomes a problem, commit the
-# JSON and report and ignore runs/*/images/ instead.
+# Generations are unseeded, so a run cannot be reproduced — committing one is how
+# the blind-scoring claim stays checkable. Whitelisted, not default, so it is a
+# deliberate act and not whatever `git add .` happened to sweep up.
+runs/*
+!runs/.gitkeep
+!runs/reference/
