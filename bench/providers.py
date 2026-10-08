@@ -12,6 +12,8 @@ import json
 import os
 import urllib.parse
 from dataclasses import dataclass, field, asdict
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Optional
 
 import httpx
@@ -29,7 +31,6 @@ COST_PER_IMAGE = {
 class GenerationResult:
     provider: str
     prompt_id: str
-    repeat: int
     blind_id: str
     ok: bool
     latency_s: float
@@ -39,7 +40,10 @@ class GenerationResult:
     # a rate limit is an operational problem, a refusal is a content-policy
     # problem, a parse error is an integration problem. Collapsing them into
     # "failed" throws away the distinction a pipeline decision depends on.
-    error_kind: Optional[str] = None     # rate_limit | payment_required | timeout | refused | parse | http | unknown
+    # parse means an exchange we could not form or read; http_client is permanent,
+    # http_server and network are transient.
+    error_kind: Optional[str] = None     # timeout | network | rate_limit | payment_required
+                                         # | refused | http_client | http_server | parse | unknown
     error_detail: Optional[str] = None
     meta: dict = field(default_factory=dict)
 
@@ -54,7 +58,6 @@ class GenerationResult:
         return {
             "provider": self.provider,
             "prompt_id": self.prompt_id,
-            "repeat": self.repeat,
             "image_path": self.image_path,
         }
 
@@ -87,8 +90,19 @@ def _payment_detail(response: httpx.Response) -> str:
     )
 
 
-class ProviderUnavailable(Exception):
-    """Raised at construction when required credentials are missing."""
+class ContentRefused(Exception):
+    """The provider declined on content-policy grounds. Never worth retrying."""
+
+
+# finishReason values meaning the model declined, as opposed to the call failing.
+_REFUSAL_FINISH_REASONS = {
+    "SAFETY",
+    "PROHIBITED_CONTENT",
+    "BLOCKLIST",
+    "IMAGE_SAFETY",
+    "RECITATION",
+    "SPII",
+}
 
 
 class BaseProvider:
@@ -106,6 +120,9 @@ class BaseProvider:
     @staticmethod
     def classify_error(exc: Exception) -> tuple[str, str]:
         """Map an exception to (error_kind, detail)."""
+        if isinstance(exc, ContentRefused):
+            return "refused", str(exc)
+        # TimeoutException is itself a TransportError, so it must be tested first.
         if isinstance(exc, httpx.TimeoutException):
             return "timeout", str(exc) or "request timed out"
         if isinstance(exc, httpx.HTTPStatusError):
@@ -114,12 +131,33 @@ class BaseProvider:
                 return "rate_limit", f"HTTP 429: {exc.response.text[:200]}"
             if code == 402:
                 return "payment_required", f"HTTP 402: {_payment_detail(exc.response)}"
-            if code in (400, 403) and "safety" in exc.response.text.lower():
-                return "refused", exc.response.text[:200]
-            return "http", f"HTTP {code}: {exc.response.text[:200]}"
-        if isinstance(exc, (KeyError, IndexError, ValueError)):
+            kind = "http_server" if code >= 500 else "http_client"
+            return kind, f"HTTP {code}: {exc.response.text[:200]}"
+        if isinstance(exc, httpx.TransportError):
+            return "network", f"{type(exc).__name__}: {exc}"
+        if isinstance(exc, (httpx.InvalidURL, KeyError, IndexError, ValueError)):
             return "parse", f"{type(exc).__name__}: {exc}"
         return "unknown", f"{type(exc).__name__}: {exc}"
+
+    @staticmethod
+    def retry_after_seconds(exc: Exception, cap: float = 120.0) -> float | None:
+        """Delay a Retry-After header asks for, capped so a bad value cannot stall a run."""
+        if not isinstance(exc, httpx.HTTPStatusError):
+            return None
+        raw = (exc.response.headers.get("retry-after") or "").strip()
+        if not raw:
+            return None
+        try:
+            return min(max(float(int(raw)), 0.0), cap)
+        except ValueError:
+            pass
+        try:
+            when = parsedate_to_datetime(raw)
+        except (TypeError, ValueError):
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        return min(max((when - datetime.now(timezone.utc)).total_seconds(), 0.0), cap)
 
 
 class GeminiFlashImage(BaseProvider):
@@ -154,8 +192,10 @@ class GeminiFlashImage(BaseProvider):
 
         candidates = data.get("candidates") or []
         if not candidates:
-            # Prompt feedback carries the block reason when the request was refused.
             feedback = data.get("promptFeedback", {})
+            reason = feedback.get("blockReason")
+            if reason:
+                raise ContentRefused(f"blockReason={reason}")
             raise ValueError(f"no candidates returned; feedback={feedback}")
 
         for part in candidates[0].get("content", {}).get("parts", []):
@@ -169,6 +209,8 @@ class GeminiFlashImage(BaseProvider):
                 )
 
         finish = candidates[0].get("finishReason", "unknown")
+        if finish in _REFUSAL_FINISH_REASONS:
+            raise ContentRefused(f"finishReason={finish}")
         raise ValueError(f"no inline image part in response (finishReason={finish})")
 
 
@@ -257,11 +299,7 @@ def load_available() -> list[BaseProvider]:
     """
     live: list[BaseProvider] = []
     for cls in ALL_PROVIDERS:
-        try:
-            inst = cls()
-        except ProviderUnavailable as exc:
-            print(f"  skip {cls.name}: {exc}")
-            continue
+        inst = cls()
         if not inst.available():
             print(f"  skip {cls.name}: no credentials configured")
             continue

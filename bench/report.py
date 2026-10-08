@@ -22,7 +22,18 @@ def _median(values: list[float]) -> float | None:
 
 
 def _p90(values: list[float]) -> float | None:
-    return round(sorted(values)[int(0.9 * (len(values) - 1))], 2) if values else None
+    """Linear interpolation. The previous nearest-rank floor, int(0.9*(n-1)),
+    returned the minimum at n=2 and only reached a true p90 at n>=11, so it
+    printed a p90 below the median."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return round(ordered[0], 2)
+    pos = 0.9 * (len(ordered) - 1)
+    low = int(pos)
+    high = min(low + 1, len(ordered) - 1)
+    return round(ordered[low] + (pos - low) * (ordered[high] - ordered[low]), 2)
 
 
 def _cache_state(row: dict) -> str | None:
@@ -49,7 +60,7 @@ def build_report(run_dir: Path) -> Path:
     # results.json carries no image_path; the blind map is the only join.
     images = blind_map["images"]
     image_paths = {
-        (rec["provider"], rec["prompt_id"], rec["repeat"]): rec["image_path"]
+        (rec["provider"], rec["prompt_id"]): rec["image_path"]
         for rec in images.values()
     }
     prompts_by_id = {p["id"]: p for p in prompts}
@@ -152,7 +163,7 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
         match = next(
             (
                 r for r in payload["results"]
-                if r["provider"] == provider and r["prompt_id"] == prompt_id and r["repeat"] == 1
+                if r["provider"] == provider and r["prompt_id"] == prompt_id
             ),
             None,
         )
@@ -163,7 +174,7 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
                 f'<td class="fail"><span class="tag">{esc(match["error_kind"])}</span>'
                 f'<div class="detail">{esc((match["error_detail"] or "")[:160])}</div></td>'
             )
-        src = image_paths.get((provider, prompt_id, 1))
+        src = image_paths.get((provider, prompt_id))
         entry = score_by_image.get((provider, prompt_id))
         badge = ""
         if entry:

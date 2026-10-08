@@ -32,9 +32,10 @@ from .providers import (
 
 REQUEST_TIMEOUT = httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=10.0)
 MAX_ATTEMPTS = 3
-# payment_required is retryable on evidence: Pollinations' x402 gate is driven by
-# request rate, and backoff recovered 3 of 12 outputs in run 20261008-162624.
-RETRYABLE = {"rate_limit", "payment_required", "timeout", "http"}
+# payment_required is retryable on evidence: the x402 gate is driven by request rate,
+# and backoff recovered 3 of 12 outputs in run 20261008-162624. http_client (4xx) and
+# refused are permanent, so retrying them only burns quota and delays the failure.
+RETRYABLE = {"rate_limit", "payment_required", "timeout", "network", "http_server"}
 
 
 def load_prompts(config_path: Path, axis: str | None = None) -> tuple[dict, list[dict]]:
@@ -52,7 +53,6 @@ async def _attempt(
     provider: BaseProvider,
     client: httpx.AsyncClient,
     prompt_spec: dict,
-    repeat: int,
     blind_id: str,
     images_dir: Path,
 ) -> GenerationResult:
@@ -77,7 +77,6 @@ async def _attempt(
             return GenerationResult(
                 provider=provider.name,
                 prompt_id=prompt_id,
-                repeat=repeat,
                 blind_id=blind_id,
                 ok=True,
                 latency_s=round(latency, 3),
@@ -101,14 +100,15 @@ async def _attempt(
             # Exponential backoff with jitter. Jitter matters because every provider
             # starts its suite at the same instant; without it the retries collide
             # on the same schedule and we re-trigger the rate limit we backed off from.
-            delay = (2 ** attempt) + random.uniform(0, 1.5)
-            print(f"    {provider.name}/{prompt_id} r{repeat}: {last_kind}, retry in {delay:.1f}s")
+            # A server that says when to come back beats guessing with our own curve.
+            hinted = provider.retry_after_seconds(exc)
+            delay = hinted if hinted is not None else (2 ** attempt) + random.uniform(0, 1.5)
+            print(f"    {provider.name}/{prompt_id}: {last_kind}, retry in {delay:.1f}s")
             await asyncio.sleep(delay)
 
     return GenerationResult(
         provider=provider.name,
         prompt_id=prompt_id,
-        repeat=repeat,
         blind_id=blind_id,
         ok=False,
         latency_s=round(latency, 3),
@@ -121,7 +121,6 @@ async def _attempt(
 async def _run_provider(
     provider: BaseProvider,
     prompts: list[dict],
-    repeats: int,
     images_dir: Path,
 ) -> list[GenerationResult]:
     # The slot is deliberately held across the backoff sleep. When the limit is a
@@ -132,17 +131,15 @@ async def _run_provider(
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
 
-        async def one(spec: dict, repeat: int) -> None:
+        async def one(spec: dict) -> None:
             async with sem:
                 blind_id = uuid.uuid4().hex[:10]
-                res = await _attempt(provider, client, spec, repeat, blind_id, images_dir)
+                res = await _attempt(provider, client, spec, blind_id, images_dir)
                 status = "ok" if res.ok else f"FAIL({res.error_kind})"
-                print(f"  {provider.name:<20} {spec['id']} r{repeat}  {res.latency_s:>6.2f}s  {status}")
+                print(f"  {provider.name:<20} {spec['id']:<8}{res.latency_s:>6.2f}s  {status}")
                 results.append(res)
 
-        await asyncio.gather(
-            *(one(spec, r) for spec in prompts for r in range(1, repeats + 1))
-        )
+        await asyncio.gather(*(one(spec) for spec in prompts))
 
     return results
 
@@ -168,7 +165,7 @@ def build_units(prompts: list[dict], results: list[GenerationResult]) -> list[di
             continue
         spec = specs[res.prompt_id]
         group = _group_key(spec)
-        key = (res.provider, group) if group else (res.provider, res.prompt_id, res.repeat)
+        key = (res.provider, group) if group else (res.provider, res.prompt_id)
         unit = units.setdefault(
             key,
             {
@@ -238,12 +235,7 @@ def build_scoring_manifest(
     }
 
 
-async def run(
-    config_path: Path,
-    runs_dir: Path,
-    axis: str | None = None,
-    repeats: int = 1,
-) -> str:
+async def run(config_path: Path, runs_dir: Path, axis: str | None = None) -> str:
     axes, prompts = load_prompts(config_path, axis)
 
     providers = load_available()
@@ -260,12 +252,12 @@ async def run(
 
     print(f"\nrun {run_id}")
     print(f"  providers: {', '.join(p.name for p in providers)}")
-    print(f"  prompts:   {len(prompts)}  x {repeats} repeat(s)\n")
+    print(f"  prompts:   {len(prompts)}")
 
     all_results: list[GenerationResult] = []
     # Providers run concurrently with each other; each polices its own rate limit.
     gathered = await asyncio.gather(
-        *(_run_provider(p, prompts, repeats, images_dir) for p in providers)
+        *(_run_provider(p, prompts, images_dir) for p in providers)
     )
     for batch in gathered:
         all_results.extend(batch)
@@ -280,7 +272,6 @@ async def run(
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "axes": axes,
                 "prompts": prompts,
-                "repeats": repeats,
                 "results": [r.to_results_row() for r in all_results],
             },
             indent=2,

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Entry point.
 
-    python run.py generate [--axis AXIS] [--repeats N]
+    python run.py generate [--axis AXIS]
     python run.py score  <run_id> [--no-open]
     python run.py report <run_id>
     python run.py runs
@@ -49,8 +49,6 @@ def main() -> None:
 
     gen = sub.add_parser("generate", help="run the prompt suite against all providers")
     gen.add_argument("--axis", help="limit to one axis (e.g. text_rendering)")
-    gen.add_argument("--repeats", type=int, default=1,
-                     help="generations per prompt per provider (default 1)")
 
     sc = sub.add_parser("score", help="blind scoring pass over a run")
     sc.add_argument("run_id")
@@ -66,7 +64,7 @@ def main() -> None:
 
     if args.command == "generate":
         from bench.runner import run
-        asyncio.run(run(CONFIG, RUNS, axis=args.axis, repeats=args.repeats))
+        asyncio.run(run(CONFIG, RUNS, axis=args.axis))
 
     elif args.command == "score":
         from bench.score import score_run
