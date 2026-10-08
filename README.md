@@ -152,6 +152,7 @@ python run.py generate --axis text_rendering --repeats 3
 python run.py score  <run_id>       # blind scoring pass
 python run.py report <run_id>       # unblind, build report.html
 python run.py runs                  # list runs
+python -m unittest discover -s tests -t .
 ```
 
 `generate` writes `runs/<run_id>/` — images, `results.json`, `blind_map.json`.
@@ -183,7 +184,7 @@ bench/runner.py      async execution, concurrency limits, backoff, failure captu
 bench/score.py       blind scoring CLI
 bench/report.py      unblinding and HTML comparison grid
 config/prompts.yaml  prompt suite and per-prompt pass criteria
-tests/               blinding regression checks
+tests/               blinding, unit-grouping and report-join checks
 run.py               entry point
 ```
 
