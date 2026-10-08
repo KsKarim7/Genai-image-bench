@@ -19,6 +19,8 @@ from pathlib import Path
 
 QUIT = "quit"
 SKIP = "skip"
+# The one place the score range is stated.
+SCORE_RANGE = (1, 5)
 
 _VIEW_CSS = """
   :root { color-scheme: dark light; }
@@ -74,7 +76,7 @@ def _view_html(unit: dict, run_dir: Path) -> str:
         f"<title>{html.escape(unit['unit_id'])}</title>"
         "<style>" + _VIEW_CSS + "</style></head><body>"
         f"<h1>{html.escape(unit['axis'])}</h1>"
-        f"<div class=\"scale\">{html.escape(unit['scale'])}</div>"
+        f"<div class=\"scale\">{html.escape(unit['anchors'])}</div>"
         f"<div class=\"grid\">{''.join(cards)}</div>"
         "</body></html>"
     )
@@ -109,7 +111,7 @@ def score_run(run_dir: Path, open_images: bool = True) -> None:
             print(f"[{index}/{len(remaining)}]  unit {unit['unit_id']}"
                   + (f"  ({total} images, scored as a set)" if total > 1 else ""))
             print(f"  axis:   {unit['axis']}")
-            print(f"  scale:  {unit['scale']}")
+            print(f"  anchors: {unit['anchors']}")
             for spec in unit["prompts"]:
                 print(f"  prompt: {spec['prompt']}")
                 for check in spec["checks"]:
@@ -127,7 +129,7 @@ def score_run(run_dir: Path, open_images: bool = True) -> None:
                 for rel in unit["images"]:
                     print(f"  image:  {run_dir / rel}")
 
-            value = _prompt_for_score(1, 5)
+            value = _prompt_for_score(*SCORE_RANGE)
             if value == QUIT:
                 print()
                 print("stopped. progress saved - rerun to continue.")

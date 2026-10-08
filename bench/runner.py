@@ -26,7 +26,7 @@ import yaml
 from .providers import (
     BaseProvider,
     GenerationResult,
-    COST_PER_IMAGE,
+    LIST_PRICE_USD_PER_IMAGE,
     load_available,
 )
 
@@ -41,12 +41,21 @@ RETRYABLE = {"rate_limit", "payment_required", "timeout", "network", "http_serve
 def load_prompts(config_path: Path, axis: str | None = None) -> tuple[dict, list[dict]]:
     with config_path.open(encoding="utf-8") as fh:
         cfg = yaml.safe_load(fh)
-    prompts = cfg["prompts"]
+    axes, prompts = cfg["axes"], cfg["prompts"]
+
+    # Fail here, not part-way through a scoring session.
+    missing = [name for name, spec in axes.items() if not spec.get("anchors")]
+    if missing:
+        raise SystemExit(f"axes with no scorer anchors: {', '.join(missing)}")
+    undeclared = sorted({p["axis"] for p in prompts} - set(axes))
+    if undeclared:
+        raise SystemExit(f"prompts name undeclared axes: {', '.join(undeclared)}")
+
     if axis:
         prompts = [p for p in prompts if p["axis"] == axis]
         if not prompts:
             raise SystemExit(f"no prompts found for axis {axis!r}")
-    return cfg["axes"], prompts
+    return axes, prompts
 
 
 async def _attempt(
@@ -80,7 +89,7 @@ async def _attempt(
                 blind_id=blind_id,
                 ok=True,
                 latency_s=round(latency, 3),
-                cost_usd=COST_PER_IMAGE.get(provider.name, 0.0),
+                cost_usd=LIST_PRICE_USD_PER_IMAGE.get(provider.name, 0.0),
                 image_path=f"images/{filename}",
                 meta={
                     "attempts": attempt,
@@ -220,7 +229,7 @@ def build_scoring_manifest(
             {
                 "unit_id": u["unit_id"],
                 "axis": u["axis"],
-                "scale": axes[u["axis"]]["scale"],
+                "anchors": axes[u["axis"]]["anchors"],
                 "images": [res.image_path for res in u["members"]],
                 "prompts": [
                     {

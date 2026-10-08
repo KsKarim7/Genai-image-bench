@@ -18,12 +18,14 @@ from typing import Optional
 
 import httpx
 
-# Estimated USD per image from published pricing at time of writing.
-# These are ESTIMATES used for relative comparison, not measured billing.
-COST_PER_IMAGE = {
-    "gemini-flash-image": 0.0,      # free tier
+# LIST prices, not measured spend: what a provider publishes per image on the tier
+# this harness uses. Every configured provider is on a free tier, so these are zero
+# and the report says "free tier" rather than "$0.00". README carries paid-tier list
+# prices as a separate reference table, cited and dated.
+LIST_PRICE_USD_PER_IMAGE = {
+    "gemini-flash-image": 0.0,
     "pollinations": 0.0,
-    "huggingface": 0.0,             # free inference tier
+    "huggingface": 0.0,
 }
 
 

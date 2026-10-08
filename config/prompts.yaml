@@ -7,6 +7,11 @@
 #
 # Each prompt declares the axis it probes and the concrete checks the scorer applies.
 # Checks are written to be answerable by looking at the image, not by taste.
+#
+# Wording revision, 2026-10-09, before any scored run existed: six checks named
+# another prompt by id ("same individual as cc_01"). Grouped outputs are now scored
+# as a set and the scorer never sees a prompt id, so those ids pointed at something
+# invisible. Substance unchanged; the criteria are the same criteria.
 
 axes:
   prompt_fidelity:
@@ -14,26 +19,26 @@ axes:
       Does the model satisfy explicit countable and spatial constraints? Art direction
       is largely constraints, so a model that renders beautifully but ignores "three,
       on the left" costs a human a re-roll every time.
-    scale: "1 = constraints ignored, 3 = roughly half satisfied, 5 = all satisfied"
+    anchors: "1 = constraints ignored, 3 = roughly half satisfied, 5 = all satisfied"
 
   text_rendering:
     description: >
       Legible, correctly spelled text inside the image. The most common single reason
       a generated asset cannot ship without manual repair.
-    scale: "1 = unreadable glyphs, 3 = readable with errors, 5 = exact and legible"
+    anchors: "1 = unreadable glyphs, 3 = readable with errors, 5 = exact and legible"
 
   character_consistency:
     description: >
       The same character recognisable across separate generations. The hardest
       requirement for any narrative, storyboard or series use, and the one most
       likely to decide whether a model is usable in a pipeline at all.
-    scale: "1 = unrelated subjects, 3 = same type, different individual, 5 = same individual"
+    anchors: "1 = unrelated subjects, 3 = same type, different individual, 5 = same individual"
 
   style_adherence:
     description: >
       Holding a specified visual style rather than drifting to the model's own
       default aesthetic. Measured across a set, not a single image.
-    scale: "1 = ignores style, 3 = partial, 5 = holds style across the set"
+    anchors: "1 = ignores style, 3 = partial, 5 = holds style across the set"
 
 prompts:
   # ---- prompt_fidelity -------------------------------------------------------
@@ -102,9 +107,12 @@ prompts:
       - "words spelled correctly"
 
   # ---- character_consistency -------------------------------------------------
-  # The same character described identically across three scenes. Scored as a set:
-  # the question is whether the three images show one individual or three strangers
-  # who happen to match the description.
+  # Scored as a set. Members are presented in the order declared here, so the
+  # character sheet below is always the reference image the other checks refer to.
+  # Style groups have no privileged member, so their checks are order-independent.
+  #
+  # TODO: checks that apply to the whole set are repeated per prompt. If set
+  # scoring stays, group-level checks would say it once.
   - id: cc_01
     axis: character_consistency
     consistency_group: fox_courier
@@ -124,7 +132,7 @@ prompts:
       The same young fox courier with a torn left ear, green canvas satchel and red
       scarf, now running across a rooftop at dusk. Flat 2D animation style.
     checks:
-      - "same individual as cc_01 (markings, proportions, palette)"
+      - "same individual as the character-sheet reference in this set (markings, proportions, palette)"
       - "torn left ear, satchel and scarf all carried over"
 
   - id: cc_03
@@ -134,7 +142,7 @@ prompts:
       The same young fox courier with a torn left ear, green canvas satchel and red
       scarf, now sitting on a windowsill reading a letter. Flat 2D animation style.
     checks:
-      - "same individual as cc_01 and cc_02"
+      - "same individual as the character-sheet reference and the other images in this set"
       - "torn left ear, satchel and scarf all carried over"
 
   # ---- style_adherence -------------------------------------------------------
@@ -158,7 +166,7 @@ prompts:
       illustration, visible brush texture, limited palette of slate blue, cream and
       burnt orange, soft edges, no digital gloss.
     checks:
-      - "same gouache treatment as sa_01"
+      - "gouache treatment consistent across the set"
       - "palette held"
       - "reads as the same illustrated world"
 
@@ -170,6 +178,6 @@ prompts:
       visible brush texture, limited palette of slate blue, cream and burnt orange,
       soft edges, no digital gloss.
     checks:
-      - "same gouache treatment as sa_01 and sa_02"
+      - "gouache treatment consistent across the set"
       - "palette held"
       - "no drift toward photorealism"

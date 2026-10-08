@@ -41,6 +41,13 @@ def _cache_state(row: dict) -> str | None:
     return state.upper() if isinstance(state, str) else None
 
 
+def _cost_cell(o: dict) -> str:
+    if not o["succeeded"]:
+        return "—"
+    # Zero is the measured cost of a free tier, not a missing figure.
+    return "free tier" if not o["est_cost_usd"] else f"${o['est_cost_usd']}"
+
+
 def _cache_cell(o: dict) -> str:
     c = o["cache"]
     return f"{c['hit']} hit / {c['miss']} miss" if c else "—"
@@ -193,7 +200,7 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
         f"<td>{ops[p]['p90_generated_latency_s'] if ops[p]['p90_generated_latency_s'] is not None else '—'}</td>"
         f"<td>{_cache_cell(ops[p])}</td>"
         f"<td class='cdn'>{ops[p]['median_cache_read_s'] if ops[p]['median_cache_read_s'] is not None else '—'}</td>"
-        f"<td>${ops[p]['est_cost_usd']}</td>"
+        f"<td>{_cost_cell(ops[p])}</td>"
         f"<td>{esc(', '.join(ops[p]['formats'])) or '—'}</td>"
         + "".join(
             f"<td>{ops[p]['axis_scores'].get(a) or '—'}</td>"

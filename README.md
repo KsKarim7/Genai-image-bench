@@ -39,10 +39,21 @@ Asking whether three images show the same individual cannot be answered one shuf
 image at a time, which is what the first implementation asked. A unit never spans
 providers, so showing the set together keeps it blind.
 
+Members are presented in the order the suite declares them, so a consistency group's
+character sheet is always the reference the other criteria point at. Style groups have
+no privileged member, so their criteria are order-independent.
+
 **The rubric is fixed before the run.** Per-prompt pass criteria live in
 `config/prompts.yaml` and are written before any image is generated. Deciding what
 counts as success after seeing the outputs is how a comparison turns into a
 justification. The same rule forbids swapping prompts to get cleaner numbers.
+
+One wording revision is on record. Six criteria named another prompt by id ("same
+individual as cc_01"). Under set scoring the scorer never sees a prompt id, so those
+ids pointed at something invisible. They now refer to the set, and for consistency
+groups to the character-sheet reference that is always presented first. The substance
+is unchanged and the revision predates any scored run. What the rule guards against
+is a rubric that changes without a record, not one that changes.
 
 **Failures are data.** Timeouts, rate limits, quota rejections, refusals and
 malformed responses are recorded with their reason rather than retried into
@@ -127,8 +138,11 @@ demonstrably easy to break by accident; a careful read had already missed it twi
 - Free-tier endpoints may serve lower resolution or different quotas than paid
   tiers, so latency and quality figures here are not representative of paid-tier
   performance.
-- Cost figures are estimates from published per-image pricing, held in
-  `COST_PER_IMAGE` in `bench/providers.py`. They are not measured billing.
+- Cost figures are list prices, not measured billing. `LIST_PRICE_USD_PER_IMAGE` in
+  `bench/providers.py` holds what each provider publishes for the tier this harness
+  uses. Every configured provider runs on a free tier, so the results table reports
+  "free tier" rather than a dollar figure; what a run would cost at paid-tier rates
+  is a different claim and does not share that column.
 
 ## Setup
 
