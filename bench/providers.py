@@ -60,6 +60,16 @@ class GenerationResult:
         }
 
 
+@dataclass
+class GeneratedImage:
+    """One successful generation. meta carries whatever per-request diagnostics
+    the adapter chose to surface; the runner stores it without interpreting it."""
+
+    data: bytes
+    content_type: str
+    meta: dict = field(default_factory=dict)
+
+
 # An explicit map because mimetypes reads the Windows registry and can hand back
 # .jpe for image/jpeg; committed artifacts need the same filenames on every box.
 _EXTENSIONS = {
@@ -105,8 +115,8 @@ class BaseProvider:
     def available(self) -> bool:
         return True
 
-    async def generate(self, client: httpx.AsyncClient, prompt: str) -> tuple[bytes, str]:
-        """Return (image bytes, content-type), or raise. Subclasses implement."""
+    async def generate(self, client: httpx.AsyncClient, prompt: str) -> GeneratedImage:
+        """Return a GeneratedImage, or raise. Subclasses implement."""
         raise NotImplementedError
 
     @staticmethod
@@ -145,7 +155,7 @@ class GeminiFlashImage(BaseProvider):
     def available(self) -> bool:
         return bool(self.api_key)
 
-    async def generate(self, client: httpx.AsyncClient, prompt: str) -> tuple[bytes, str]:
+    async def generate(self, client: httpx.AsyncClient, prompt: str) -> GeneratedImage:
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{self.model_id}:generateContent"
@@ -168,7 +178,11 @@ class GeminiFlashImage(BaseProvider):
             inline = part.get("inlineData") or part.get("inline_data")
             if inline and inline.get("data"):
                 mime = inline.get("mimeType") or inline.get("mime_type") or "image/png"
-                return base64.b64decode(inline["data"]), mime
+                return GeneratedImage(
+                    base64.b64decode(inline["data"]),
+                    mime,
+                    {"model_version": data.get("modelVersion")},
+                )
 
         finish = candidates[0].get("finishReason", "unknown")
         raise ValueError(f"no inline image part in response (finishReason={finish})")
@@ -186,7 +200,7 @@ class Pollinations(BaseProvider):
     # successes; the same prompts sequentially succeed. The gate is on rate.
     max_concurrency = 1
 
-    async def generate(self, client: httpx.AsyncClient, prompt: str) -> tuple[bytes, str]:
+    async def generate(self, client: httpx.AsyncClient, prompt: str) -> GeneratedImage:
         # quote(safe="") and not httpx.URL(path=...): the latter leaves "/"
         # unescaped so a prompt can inject path segments, and raises InvalidURL
         # on "?" or "#".
@@ -199,7 +213,17 @@ class Pollinations(BaseProvider):
         content_type = resp.headers.get("content-type", "")
         if not content_type.startswith("image/"):
             raise ValueError(f"expected image bytes, got content-type={content_type!r}")
-        return resp.content, content_type
+        # A cache hit bypasses the rate gate and returns in a fraction of the
+        # generation time, so a run that does not record this cannot tell a
+        # latency measurement from a CDN read.
+        return GeneratedImage(
+            resp.content,
+            content_type,
+            {
+                "x_cache": resp.headers.get("x-cache"),
+                "model": resp.headers.get("x-model-used"),
+            },
+        )
 
 
 class HuggingFaceInference(BaseProvider):
@@ -219,7 +243,7 @@ class HuggingFaceInference(BaseProvider):
     def available(self) -> bool:
         return bool(self.token)
 
-    async def generate(self, client: httpx.AsyncClient, prompt: str) -> tuple[bytes, str]:
+    async def generate(self, client: httpx.AsyncClient, prompt: str) -> GeneratedImage:
         resp = await client.post(
             f"https://api-inference.huggingface.co/models/{self.model}",
             headers={"Authorization": f"Bearer {self.token}"},
@@ -231,7 +255,7 @@ class HuggingFaceInference(BaseProvider):
         content_type = resp.headers.get("content-type", "")
         if not content_type.startswith("image/"):
             raise ValueError(f"expected image bytes, got: {resp.text[:200]}")
-        return resp.content, content_type
+        return GeneratedImage(resp.content, content_type, {"model": self.model})
 
 
 ALL_PROVIDERS: list[type[BaseProvider]] = [

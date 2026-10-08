@@ -17,6 +17,24 @@ def _mean(values: list[float]) -> float | None:
     return round(statistics.mean(values), 2) if values else None
 
 
+def _median(values: list[float]) -> float | None:
+    return round(statistics.median(values), 2) if values else None
+
+
+def _p90(values: list[float]) -> float | None:
+    return round(sorted(values)[int(0.9 * (len(values) - 1))], 2) if values else None
+
+
+def _cache_state(row: dict) -> str | None:
+    state = (row["meta"].get("provider_meta") or {}).get("x_cache")
+    return state.upper() if isinstance(state, str) else None
+
+
+def _cache_cell(o: dict) -> str:
+    c = o["cache"]
+    return f"{c['hit']} hit / {c['miss']} miss" if c else "—"
+
+
 def build_report(run_dir: Path) -> Path:
     payload = json.loads((run_dir / "results.json").read_text(encoding="utf-8"))
     blind_map = json.loads((run_dir / "blind_map.json").read_text(encoding="utf-8"))
@@ -46,15 +64,24 @@ def build_report(run_dir: Path) -> Path:
             if not r["ok"]:
                 failure_kinds[r["error_kind"] or "unknown"] += 1
 
-        latencies = [r["latency_s"] for r in ok_rows]
+        states = [_cache_state(r) for r in ok_rows]
+        reports_cache = any(st is not None for st in states)
+        hit_lat = [r["latency_s"] for r, st in zip(ok_rows, states) if st == "HIT"]
+        miss_lat = [r["latency_s"] for r, st in zip(ok_rows, states) if st == "MISS"]
+        # A provider reporting no cache status has every success counted as
+        # generated. Where it does report one, only the misses measure the
+        # provider: a hit is a CDN read and says nothing about the model.
+        gen_lat = miss_lat if reports_cache else [r["latency_s"] for r in ok_rows]
+
         ops[provider] = {
             "attempts": len(rows),
             "succeeded": len(ok_rows),
             "success_rate": round(100 * len(ok_rows) / len(rows), 1) if rows else 0.0,
-            "median_latency_s": round(statistics.median(latencies), 2) if latencies else None,
-            "p90_latency_s": (
-                round(sorted(latencies)[int(0.9 * (len(latencies) - 1))], 2)
-                if latencies else None
+            "median_generated_latency_s": _median(gen_lat),
+            "p90_generated_latency_s": _p90(gen_lat),
+            "median_cache_read_s": _median(hit_lat),
+            "cache": (
+                {"hit": len(hit_lat), "miss": len(miss_lat)} if reports_cache else None
             ),
             "est_cost_usd": round(sum(r["cost_usd"] for r in ok_rows), 4),
             "formats": sorted(
@@ -90,16 +117,21 @@ def build_report(run_dir: Path) -> Path:
     )
 
     # Console summary so the numbers are visible without opening the file.
-    print(f"\n  {'provider':<22}{'ok%':>7}{'med s':>8}{'score':>8}  failures")
+    print(f"\n  {'provider':<22}{'ok%':>7}{'gen s':>8}  {'cache':>14}{'score':>8}  failures")
     for provider in providers:
         o = ops[provider]
         score = o["overall_score"]
         fails = ", ".join(f"{k}:{v}" for k, v in o["failures"].items()) or "-"
+        gen = o["median_generated_latency_s"]
         print(
             f"  {provider:<22}{o['success_rate']:>6.1f}%"
-            f"{(o['median_latency_s'] or 0):>8.2f}"
-            f"{(score if score is not None else 0):>8.2f}  {fails}"
+            f"{(f'{gen:.2f}' if gen is not None else '-'):>8}"
+            f"  {_cache_cell(o):>14}"
+            f"{(f'{score:.2f}' if score is not None else '-'):>8}  {fails}"
         )
+    if any(ops[p]["cache"] and ops[p]["median_generated_latency_s"] is None for p in providers):
+        print(f"\n  note: a provider served only cache hits, so this run holds no")
+        print("        latency measurement for it. Measure with fresh prompts.")
     print(f"\n  report → {html_path}")
     return html_path
 
@@ -135,8 +167,10 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
     summary_rows = "".join(
         f"<tr><td class='name'>{esc(p)}</td>"
         f"<td>{ops[p]['succeeded']}/{ops[p]['attempts']} ({ops[p]['success_rate']}%)</td>"
-        f"<td>{ops[p]['median_latency_s'] if ops[p]['median_latency_s'] is not None else '—'}</td>"
-        f"<td>{ops[p]['p90_latency_s'] if ops[p]['p90_latency_s'] is not None else '—'}</td>"
+        f"<td>{ops[p]['median_generated_latency_s'] if ops[p]['median_generated_latency_s'] is not None else '—'}</td>"
+        f"<td>{ops[p]['p90_generated_latency_s'] if ops[p]['p90_generated_latency_s'] is not None else '—'}</td>"
+        f"<td>{_cache_cell(ops[p])}</td>"
+        f"<td class='cdn'>{ops[p]['median_cache_read_s'] if ops[p]['median_cache_read_s'] is not None else '—'}</td>"
         f"<td>${ops[p]['est_cost_usd']}</td>"
         f"<td>{esc(', '.join(ops[p]['formats'])) or '—'}</td>"
         + "".join(
@@ -193,6 +227,9 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
   img {{ width:100%; max-width:230px; border-radius:4px; display:block; }}
   .meta {{ color:var(--muted); font-size:12px; margin-top:6px; }}
   .score {{ color:var(--accent); font-weight:600; }}
+  .qual {{ font-weight:400; text-transform:none; letter-spacing:0;
+    color:var(--muted); font-size:11px; }}
+  .cdn {{ color:var(--muted); }}
   .fail .tag {{ color:#c0392b; font-weight:600; font-size:12px; }}
   .miss {{ color:var(--muted); text-align:center; }}
   footer {{ margin-top:40px; padding-top:16px; border-top:1px solid var(--line);
@@ -203,8 +240,12 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
 scored blind, unblinded at report time</div>
 
 <h2>Summary</h2>
-<table><thead><tr><th>provider</th><th>success</th><th>median latency</th>
-<th>p90 latency</th><th>est. cost</th><th>format</th>{axis_headers}<th>overall</th></tr></thead>
+<table><thead><tr><th>provider</th><th>success</th>
+<th>median latency<br><span class="qual">generated</span></th>
+<th>p90 latency<br><span class="qual">generated</span></th>
+<th>cache</th>
+<th>cache read<br><span class="qual">CDN, not the model</span></th>
+<th>est. cost</th><th>format</th>{axis_headers}<th>overall</th></tr></thead>
 <tbody>{summary_rows}</tbody></table>
 
 <h2>Outputs</h2>
@@ -212,6 +253,9 @@ scored blind, unblinded at report time</div>
 <tbody>{grid_rows}</tbody></table>
 
 <footer>
+Latency columns marked "generated" exclude cache hits; a cache read measures the
+provider's CDN, not the model, so the two are never averaged. A provider that served
+only cache hits has no latency measurement in this run.
 Scores are from a single human scorer on a small prompt set and indicate direction,
 not statistical significance. Cost figures are estimates from published per-image
 pricing, not measured billing. Free-tier endpoints may differ from paid tiers in

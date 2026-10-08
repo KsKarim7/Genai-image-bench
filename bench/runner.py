@@ -63,12 +63,12 @@ async def _attempt(
         attempts_made = attempt
         started = time.perf_counter()
         try:
-            data, content_type = await provider.generate(client, prompt_text)
+            image = await provider.generate(client, prompt_text)
             latency = time.perf_counter() - started
 
             # The blind id IS the filename: nothing on disk names the provider.
-            filename = f"{blind_id}{extension_for(content_type)}"
-            (images_dir / filename).write_bytes(data)
+            filename = f"{blind_id}{extension_for(image.content_type)}"
+            (images_dir / filename).write_bytes(image.data)
 
             return GenerationResult(
                 provider=provider.name,
@@ -81,8 +81,10 @@ async def _attempt(
                 image_path=f"images/{filename}",
                 meta={
                     "attempts": attempt,
-                    "bytes": len(data),
-                    "content_type": content_type.split(";")[0].strip(),
+                    "bytes": len(image.data),
+                    "content_type": image.content_type.split(";")[0].strip(),
+                    # Nested, not merged: an adapter key cannot shadow one of ours.
+                    "provider_meta": image.meta,
                 },
             )
         except Exception as exc:  # noqa: BLE001 - classified below, never swallowed
