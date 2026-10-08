@@ -21,6 +21,7 @@ import httpx
 # Gemini price and destroys the latency measurement. README has the cited table.
 LIST_PRICE_USD_PER_IMAGE = {
     "gemini-3.1-flash-lite-image": 0.0336,
+    "gemini-3.1-flash-image": 0.067,
     "pollinations": 0.0,
     "huggingface": 0.0,
 }
@@ -104,6 +105,12 @@ class BaseProvider:
     name: str = "base"
     # Conservative default; free tiers rate-limit aggressively.
     max_concurrency: int = 2
+    # Providers sharing a credential share a rate gate, so they share one semaphore.
+    # None means this provider is alone on its own quota.
+    quota_key: str | None = None
+
+    def gate(self) -> str:
+        return self.quota_key or self.name
 
     def available(self) -> bool:
         return True
@@ -168,20 +175,22 @@ def _refusal_reason(node: dict) -> str | None:
     return f"blockReason={reason}" if reason else None
 
 
-class GeminiFlashLiteImage(BaseProvider):
-    """Google Gemini 3.1 Flash Lite Image.
+class _GeminiImage(BaseProvider):
+    """Shared adapter for the Gemini 3.1 image models.
 
-    The 3.1 image models are not on models/{id}:generateContent: they take a
-    response_format on /v1beta/interactions and return the image under
-    interaction.outputImage. Lite emits 1K only, which is what its per-image
-    price is quoted against.
+    They are not on models/{id}:generateContent: they take a response_format on
+    /v1beta/interactions and return the image under interaction.outputImage.
+
+    Both models run at 1K. Lite supports nothing else, and holding the full model
+    there too keeps the Lite-against-full comparison about the model rather than
+    about output resolution.
     """
 
-    name = "gemini-3.1-flash-lite-image"
-    model_id = "gemini-3.1-flash-lite-image"
+    model_id = ""
     image_size = "1K"
     aspect_ratio = "1:1"
     max_concurrency = 2
+    quota_key = "google-ai-studio"
 
     def __init__(self) -> None:
         self.api_key = os.getenv("GOOGLE_API_KEY", "").strip()
@@ -236,6 +245,16 @@ class GeminiFlashLiteImage(BaseProvider):
         if reason:
             raise ContentRefused(reason)
         raise ValueError(f"no image in interaction response: {str(payload)[:200]}")
+
+
+class GeminiFlashLiteImage(_GeminiImage):
+    name = "gemini-3.1-flash-lite-image"
+    model_id = "gemini-3.1-flash-lite-image"
+
+
+class GeminiFlashImage(_GeminiImage):
+    name = "gemini-3.1-flash-image"
+    model_id = "gemini-3.1-flash-image"
 
 
 class Pollinations(BaseProvider):
@@ -306,6 +325,7 @@ class HuggingFaceInference(BaseProvider):
 
 ALL_PROVIDERS: list[type[BaseProvider]] = [
     GeminiFlashLiteImage,
+    GeminiFlashImage,
     Pollinations,
     HuggingFaceInference,
 ]

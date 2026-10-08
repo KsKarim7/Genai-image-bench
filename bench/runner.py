@@ -120,18 +120,27 @@ async def _attempt(
     )
 
 
+def build_gates(providers: list[BaseProvider]) -> dict[str, asyncio.Semaphore]:
+    """One semaphore per credential, not per provider.
+
+    The rate gate is per key, so two adapters on one key have to share a cap rather
+    than get one each. Where they disagree on max_concurrency the lower wins.
+    """
+    limits: dict[str, int] = {}
+    for provider in providers:
+        key = provider.gate()
+        limits[key] = min(limits.get(key, provider.max_concurrency), provider.max_concurrency)
+    return {key: asyncio.Semaphore(limit) for key, limit in limits.items()}
+
+
 async def _run_provider(
     provider: BaseProvider,
     prompts: list[dict],
     images_dir: Path,
+    sem: asyncio.Semaphore,
 ) -> list[GenerationResult]:
     # The slot is held across the backoff sleep on purpose: when the limit is a rate
     # gate, not issuing the next request is the point. Do not "fix" this to release.
-    #
-    # TODO: one semaphore per provider, but the gate is per key. Two adapters sharing
-    # one credential (two Gemini models, say) would get a cap each and double the
-    # concurrency against one quota. Needs a quota_key, defaulting to name.
-    sem = asyncio.Semaphore(provider.max_concurrency)
     results: list[GenerationResult] = []
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
@@ -147,6 +156,13 @@ async def _run_provider(
         await asyncio.gather(*(one(spec) for spec in prompts))
 
     return results
+
+
+def _shared_gates(providers: list[BaseProvider]) -> dict[str, list[str]]:
+    grouped: dict[str, list[str]] = {}
+    for provider in providers:
+        grouped.setdefault(provider.gate(), []).append(provider.name)
+    return {key: names for key, names in grouped.items() if len(names) > 1}
 
 
 def _group_key(spec: dict) -> str | None:
@@ -257,11 +273,14 @@ async def run(config_path: Path, runs_dir: Path, axis: str | None = None) -> str
 
     print(f"\nrun {run_id}")
     print(f"  providers: {', '.join(p.name for p in providers)}")
+    for key, members in _shared_gates(providers).items():
+        print(f"  shared rate gate {key}: {', '.join(members)}")
     print(f"  prompts:   {len(prompts)}")
 
     all_results: list[GenerationResult] = []
+    gates = build_gates(providers)
     gathered = await asyncio.gather(
-        *(_run_provider(p, prompts, images_dir) for p in providers)
+        *(_run_provider(p, prompts, images_dir, gates[p.gate()]) for p in providers)
     )
     for batch in gathered:
         all_results.extend(batch)

@@ -121,6 +121,13 @@ demonstrably easy to break by accident; a careful read had already missed it twi
   provider's rate gate entirely. Only first-generation-on-fresh-prompts figures
   are measurements of the provider; `x-cache` is recorded per request so hits and
   misses can be separated.
+- Pollinations caches aggressively, so its cold-generation latency can only be
+  measured on a prompt it has not served before. The figures gathered so far
+  straddle a change in per-provider concurrency from 2 to 1, which against a
+  rate-gated endpoint are two different conditions: median 5.62s over 5 samples at
+  concurrency 2, and 5.23s over 6 at concurrency 1. The ranges overlap almost
+  entirely, so the conditions are not distinguishable at these sample sizes, but
+  they are reported separately rather than pooled.
 - Set-scored axes produce one score per provider per group, so character
   consistency and style adherence each rest on a single judgement by a single
   scorer. Where some generations in a group failed, the set is scored on the
@@ -155,9 +162,15 @@ Batch and Flex tiers are cheaper and are deliberately not used. Batch roughly ha
 the Gemini price, and destroys the latency measurement that is one of the four things
 being compared.
 
+Both Gemini models run at 1K output. Lite supports nothing else, and holding the full
+model there as well keeps the Lite-against-full comparison about the model rather than
+about resolution. They share one credential, so they share one rate gate rather than
+getting a concurrency cap each.
+
 | Provider | Tier used | List price / image | Derivation | Source |
 |---|---|---|---|---|
 | `gemini-3.1-flash-lite-image` | Standard, paid | **$0.0336** | Published per-image rate. Cross-checks against $30.00 per 1M output tokens at roughly 1,120 tokens per image. | [ai.google.dev pricing](https://ai.google.dev/gemini-api/docs/pricing), page last updated 2026-10-07, read 2026-10-09 |
+| `gemini-3.1-flash-image` | Standard, paid | **$0.067** | Published per-image rate at 1K. Cross-checks against $60.00 per 1M output tokens at roughly 1,120 tokens per image. | [ai.google.dev pricing](https://ai.google.dev/gemini-api/docs/pricing), page last updated 2026-10-07, read 2026-10-09 |
 | `pollinations` | Anonymous, keyless | **$0**, gated rather than billed | Unpaid requests are refused with HTTP 402, not charged. The x402 challenge asks 10000 base units of USDC (6 decimals) = 0.01 USDC, so ~$0.01 is the price of not being gated. | Measured from the `payment-required` response header, 2026-10-08 |
 
 No Gemini image model has a free tier: Google lists "Free Tier: Not available" for all
