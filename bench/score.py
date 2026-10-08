@@ -1,115 +1,157 @@
 """Blind scoring pass.
 
-Reads blind_map.json for each output's prompt id and image path and drops its provider
-field. Outputs are shown shuffled, named only by their blind id; scores are keyed by
-that id. Provider identity is rejoined in report.py.
+Reads scoring_manifest.json and nothing else. The manifest carries no provider
+name and no field that joins to one, so this module cannot leak an identity it
+never loads. Scores are keyed by unit id; report.py does the unblinding.
 
-Unblinded, the scorer knows which output came from the model they expect to win and
-that expectation moves the number. Avoiding that artifact is the point of the project.
+Unblinded, the scorer knows which output came from the model they expect to win
+and that expectation moves the number. Avoiding that is the point of the project.
 """
 
 from __future__ import annotations
 
+import html
 import json
 import random
+import tempfile
 import webbrowser
 from pathlib import Path
 
+QUIT = "quit"
+SKIP = "skip"
 
-def _prompt_for_int(label: str, low: int, high: int) -> int | None:
+_VIEW_CSS = """
+  :root { color-scheme: dark light; }
+  body { font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",sans-serif;
+         margin:0; padding:28px; background:#17171a; color:#ececea; }
+  h1 { font-size:14px; text-transform:uppercase; letter-spacing:.08em;
+       color:#9a9a95; margin:0 0 6px; }
+  .scale { color:#9a9a95; font-size:13px; margin-bottom:22px; }
+  .grid { display:flex; flex-wrap:wrap; gap:22px; align-items:flex-start; }
+  figure { margin:0; max-width:380px; }
+  img { width:100%; border-radius:6px; display:block; background:#000; }
+  figcaption { font-size:13px; color:#c9c9c4; margin-top:8px; }
+  b { display:block; color:#5fcfa4; font-size:11px; text-transform:uppercase;
+      letter-spacing:.07em; margin-bottom:4px; }
+  p { margin:0 0 6px; }
+  ul { margin:0; padding-left:18px; color:#9a9a95; font-size:12px; }
+"""
+
+
+def _prompt_for_score(low: int, high: int) -> int | str:
     while True:
         try:
-            raw = input(f"    {label} [{low}-{high}, s=skip, q=quit]: ").strip().lower()
+            raw = input(f"    score [{low}-{high}, s=skip, q=quit]: ").strip().lower()
         except EOFError:
             print()
-            return None
+            return QUIT
         if raw == "q":
-            return None
+            return QUIT
         if raw == "s":
-            return -1
+            return SKIP
         if raw.isdigit() and low <= int(raw) <= high:
             return int(raw)
         print(f"      enter a number {low}-{high}, or s / q")
 
 
-def score_run(run_dir: Path, open_images: bool = True) -> None:
-    results_path = run_dir / "results.json"
-    if not results_path.exists():
-        raise SystemExit(f"no results.json in {run_dir}")
-
-    payload = json.loads(results_path.read_text(encoding="utf-8"))
-    prompts_by_id = {p["id"]: p for p in payload["prompts"]}
-    axes = payload["axes"]
-
-    blind_map_path = run_dir / "blind_map.json"
-    if not blind_map_path.exists():
-        raise SystemExit("blind_map.json missing — rerun generate")
-
-    # We read the blind map ONLY for the image path and prompt id. Provider is
-    # popped before anything reaches the screen, so an accidental print cannot
-    # leak it. The unblinding happens in report.py and nowhere else.
-    raw_map = json.loads(blind_map_path.read_text(encoding="utf-8"))
-    items = []
-    for blind_id, rec in raw_map.items():
-        items.append(
-            {
-                "blind_id": blind_id,
-                "prompt_id": rec["prompt_id"],
-                "image_path": rec["image_path"],
-            }
+def _view_html(unit: dict, run_dir: Path) -> str:
+    """Images carry no suffix on disk, so they are shown through <img>, which
+    sniffs the bytes instead of trusting a filename."""
+    total = len(unit["images"])
+    cards = []
+    for index, (rel, spec) in enumerate(zip(unit["images"], unit["prompts"]), 1):
+        uri = (run_dir / rel).resolve().as_uri()
+        checks = "".join(f"<li>{html.escape(c)}</li>" for c in spec["checks"])
+        label = f"image {index} of {total}" if total > 1 else "output"
+        cards.append(
+            f'<figure><img src="{uri}" alt=""><figcaption><b>{label}</b>'
+            f"<p>{html.escape(spec['prompt'])}</p><ul>{checks}</ul>"
+            "</figcaption></figure>"
         )
+    return (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>{html.escape(unit['unit_id'])}</title>"
+        "<style>" + _VIEW_CSS + "</style></head><body>"
+        f"<h1>{html.escape(unit['axis'])}</h1>"
+        f"<div class=\"scale\">{html.escape(unit['scale'])}</div>"
+        f"<div class=\"grid\">{''.join(cards)}</div>"
+        "</body></html>"
+    )
 
-    random.shuffle(items)
+
+def score_run(run_dir: Path, open_images: bool = True) -> None:
+    manifest_path = run_dir / "scoring_manifest.json"
+    if not manifest_path.exists():
+        raise SystemExit(f"no scoring_manifest.json in {run_dir} - rerun generate")
+
+    units = json.loads(manifest_path.read_text(encoding="utf-8"))["units"]
+    random.shuffle(units)
 
     scores_path = run_dir / "scores.json"
     scores = json.loads(scores_path.read_text(encoding="utf-8")) if scores_path.exists() else {}
 
-    remaining = [i for i in items if i["blind_id"] not in scores]
+    remaining = [u for u in units if u["unit_id"] not in scores]
     if not remaining:
-        print("every output already scored. delete scores.json to redo.")
+        print("every unit already scored. delete scores.json to redo.")
         return
 
-    print(f"\nblind scoring — {len(remaining)} outputs remaining")
-    print("outputs are shuffled and anonymous. score what you see, not what you expect.\n")
+    views = Path(tempfile.mkdtemp(prefix="bench-score-")) if open_images else None
+
+    print()
+    print(f"blind scoring - {len(remaining)} of {len(units)} units remaining")
+    print("units are shuffled and anonymous. score what you see, not what you expect.")
 
     try:
-        for idx, item in enumerate(remaining, 1):
-            spec = prompts_by_id[item["prompt_id"]]
-            axis = spec["axis"]
-            axis_info = axes[axis]
+        for index, unit in enumerate(remaining, 1):
+            total = len(unit["images"])
+            print()
+            print(f"[{index}/{len(remaining)}]  unit {unit['unit_id']}"
+                  + (f"  ({total} images, scored as a set)" if total > 1 else ""))
+            print(f"  axis:   {unit['axis']}")
+            print(f"  scale:  {unit['scale']}")
+            for spec in unit["prompts"]:
+                print(f"  prompt: {spec['prompt']}")
+                for check in spec["checks"]:
+                    print(f"    - {check}")
 
-            print(f"\n[{idx}/{len(remaining)}]  output {item['blind_id']}")
-            print(f"  axis:   {axis}")
-            print(f"  scale:  {axis_info['scale']}")
-            print(f"  prompt: {' '.join(spec['prompt'].split())}")
-            print("  checks:")
-            for check in spec["checks"]:
-                print(f"    - {check}")
-
-            image_file = run_dir / item["image_path"]
-            print(f"  image:  {image_file}")
-            if open_images:
+            if views is not None:
+                view = views / f"{unit['unit_id']}.html"
+                view.write_text(_view_html(unit, run_dir), encoding="utf-8")
+                print(f"  view:   {view}")
                 try:
-                    webbrowser.open(image_file.resolve().as_uri())
+                    webbrowser.open(view.resolve().as_uri())
                 except Exception:
-                    pass  # viewing manually is fine; the path is printed above
+                    pass  # the path is printed above
+            else:
+                for rel in unit["images"]:
+                    print(f"  image:  {run_dir / rel}")
 
-            value = _prompt_for_int("score", 1, 5)
-            if value is None:
-                print("\nstopped. progress saved — rerun to continue.")
+            value = _prompt_for_score(1, 5)
+            if value == QUIT:
+                print()
+                print("stopped. progress saved - rerun to continue.")
                 break
-            if value == -1:
+            if value == SKIP:
                 continue
 
             try:
                 note = input("    note (optional, enter to skip): ").strip()
             except EOFError:
                 note = ""
-            scores[item["blind_id"]] = {"score": value, "note": note or None, "axis": axis}
+            scores[unit["unit_id"]] = {
+                "score": value,
+                "note": note or None,
+                "axis": unit["axis"],
+            }
             scores_path.write_text(json.dumps(scores, indent=2), encoding="utf-8")
     except KeyboardInterrupt:
         # Every score is flushed as it is entered, so there is nothing to unwind.
-        print("\n\ninterrupted. progress saved - rerun to continue.")
+        print()
+        print()
+        print("interrupted. progress saved - rerun to continue.")
 
-    print(f"\n  {len(scores)}/{len(items)} scored → {scores_path}")
-    print(f"\n  next: python run.py report {run_dir.name}")
+    print()
+    print(f"  {len(scores)}/{len(units)} units scored -> {scores_path}")
+    print()
+    print(f"  next: python run.py report {run_dir.name}")

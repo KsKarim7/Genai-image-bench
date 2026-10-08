@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import base64
 import json
-import mimetypes
 import os
 import urllib.parse
 from dataclasses import dataclass, field, asdict
@@ -68,21 +67,6 @@ class GeneratedImage:
     data: bytes
     content_type: str
     meta: dict = field(default_factory=dict)
-
-
-# An explicit map because mimetypes reads the Windows registry and can hand back
-# .jpe for image/jpeg; committed artifacts need the same filenames on every box.
-_EXTENSIONS = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-}
-
-
-def extension_for(content_type: str) -> str:
-    base = (content_type or "").split(";")[0].strip().lower()
-    return _EXTENSIONS.get(base) or mimetypes.guess_extension(base) or ".bin"
 
 
 def _payment_detail(response: httpx.Response) -> str:

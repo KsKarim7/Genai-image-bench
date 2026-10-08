@@ -24,7 +24,6 @@ from .providers import (
     BaseProvider,
     GenerationResult,
     COST_PER_IMAGE,
-    extension_for,
     load_available,
 )
 
@@ -66,8 +65,10 @@ async def _attempt(
             image = await provider.generate(client, prompt_text)
             latency = time.perf_counter() - started
 
-            # The blind id IS the filename: nothing on disk names the provider.
-            filename = f"{blind_id}{extension_for(image.content_type)}"
+            # The blind id IS the filename, with no suffix: a .jpg beside a .png
+            # partitions the set by provider. Real format is recorded in meta and
+            # the scorer views images through an <img> tag, which sniffs content.
+            filename = blind_id
             (images_dir / filename).write_bytes(image.data)
 
             return GenerationResult(
@@ -150,6 +151,37 @@ def build_blind_map(results: list[GenerationResult]) -> dict[str, dict]:
     return {res.blind_id: res.to_blind_entry() for res in results if res.ok}
 
 
+def build_scoring_manifest(
+    run_id: str, axes: dict, prompts: list[dict], results: list[GenerationResult]
+) -> dict:
+    """The scorer's only input.
+
+    Carries no provider and nothing that joins to one: no bytes, no latency, no
+    content type, and no prompt id. Each unit is one scoring decision.
+    """
+    specs = {p["id"]: p for p in prompts}
+    units = []
+    for res in results:
+        if not res.ok:
+            continue
+        spec = specs[res.prompt_id]
+        units.append(
+            {
+                "unit_id": res.blind_id,
+                "axis": spec["axis"],
+                "scale": axes[spec["axis"]]["scale"],
+                "images": [res.image_path],
+                "prompts": [
+                    {
+                        "prompt": " ".join(spec["prompt"].split()),
+                        "checks": spec["checks"],
+                    }
+                ],
+            }
+        )
+    return {"run_id": run_id, "units": units}
+
+
 async def run(
     config_path: Path,
     runs_dir: Path,
@@ -200,6 +232,10 @@ async def run(
     )
     (run_dir / "blind_map.json").write_text(
         json.dumps(blind_map, indent=2), encoding="utf-8"
+    )
+    (run_dir / "scoring_manifest.json").write_text(
+        json.dumps(build_scoring_manifest(run_id, axes, prompts, all_results), indent=2),
+        encoding="utf-8",
     )
 
     ok = sum(1 for r in all_results if r.ok)
