@@ -1,0 +1,203 @@
+"""Unblinding and report generation.
+
+This is the only module that joins scores back to provider identity. It emits a
+self-contained HTML file: a summary table plus a prompt-by-provider image grid.
+"""
+
+from __future__ import annotations
+
+import json
+import statistics
+from collections import defaultdict
+from pathlib import Path
+
+
+def _mean(values: list[float]) -> float | None:
+    return round(statistics.mean(values), 2) if values else None
+
+
+def build_report(run_dir: Path) -> Path:
+    payload = json.loads((run_dir / "results.json").read_text())
+    blind_map = json.loads((run_dir / "blind_map.json").read_text())
+
+    scores_path = run_dir / "scores.json"
+    scores = json.loads(scores_path.read_text()) if scores_path.exists() else {}
+    if not scores:
+        print("  note: no scores.json — report will show operational metrics only")
+
+    results = payload["results"]
+    prompts = payload["prompts"]
+    prompts_by_id = {p["id"]: p for p in prompts}
+    providers = sorted({r["provider"] for r in results})
+
+    # --- operational metrics ------------------------------------------------
+    ops: dict[str, dict] = {}
+    for provider in providers:
+        rows = [r for r in results if r["provider"] == provider]
+        ok_rows = [r for r in rows if r["ok"]]
+        failure_kinds: dict[str, int] = defaultdict(int)
+        for r in rows:
+            if not r["ok"]:
+                failure_kinds[r["error_kind"] or "unknown"] += 1
+
+        latencies = [r["latency_s"] for r in ok_rows]
+        ops[provider] = {
+            "attempts": len(rows),
+            "succeeded": len(ok_rows),
+            "success_rate": round(100 * len(ok_rows) / len(rows), 1) if rows else 0.0,
+            "median_latency_s": round(statistics.median(latencies), 2) if latencies else None,
+            "p90_latency_s": (
+                round(sorted(latencies)[int(0.9 * (len(latencies) - 1))], 2)
+                if latencies else None
+            ),
+            "est_cost_usd": round(sum(r["cost_usd"] for r in ok_rows), 4),
+            "failures": dict(failure_kinds),
+        }
+
+    # --- quality scores, unblinded here and only here -----------------------
+    by_provider_axis: dict[tuple[str, str], list[float]] = defaultdict(list)
+    score_by_image: dict[tuple[str, str], dict] = {}
+    for blind_id, record in blind_map.items():
+        entry = scores.get(blind_id)
+        if not entry or entry.get("score") is None:
+            continue
+        by_provider_axis[(record["provider"], entry["axis"])].append(entry["score"])
+        score_by_image[(record["provider"], record["prompt_id"])] = entry
+
+    axes = sorted({p["axis"] for p in prompts})
+    for provider in providers:
+        ops[provider]["axis_scores"] = {
+            axis: _mean(by_provider_axis.get((provider, axis), [])) for axis in axes
+        }
+        all_scores = [s for axis in axes for s in by_provider_axis.get((provider, axis), [])]
+        ops[provider]["overall_score"] = _mean(all_scores)
+        ops[provider]["n_scored"] = len(all_scores)
+
+    (run_dir / "summary.json").write_text(json.dumps(ops, indent=2))
+    html_path = run_dir / "report.html"
+    html_path.write_text(_render_html(payload, ops, providers, axes, prompts, score_by_image))
+
+    # Console summary so the numbers are visible without opening the file.
+    print(f"\n  {'provider':<22}{'ok%':>7}{'med s':>8}{'score':>8}  failures")
+    for provider in providers:
+        o = ops[provider]
+        score = o["overall_score"]
+        fails = ", ".join(f"{k}:{v}" for k, v in o["failures"].items()) or "-"
+        print(
+            f"  {provider:<22}{o['success_rate']:>6.1f}%"
+            f"{(o['median_latency_s'] or 0):>8.2f}"
+            f"{(score if score is not None else 0):>8.2f}  {fails}"
+        )
+    print(f"\n  report → {html_path}")
+    return html_path
+
+
+def _render_html(payload, ops, providers, axes, prompts, score_by_image) -> str:
+    def cell(provider: str, prompt_id: str) -> str:
+        match = next(
+            (
+                r for r in payload["results"]
+                if r["provider"] == provider and r["prompt_id"] == prompt_id and r["repeat"] == 1
+            ),
+            None,
+        )
+        if match is None:
+            return '<td class="miss">—</td>'
+        if not match["ok"]:
+            return (
+                f'<td class="fail"><span class="tag">{match["error_kind"]}</span>'
+                f'<div class="detail">{(match["error_detail"] or "")[:120]}</div></td>'
+            )
+        entry = score_by_image.get((provider, prompt_id))
+        badge = f'<span class="score">{entry["score"]}/5</span>' if entry else ""
+        note = f'<div class="detail">{entry["note"]}</div>' if entry and entry.get("note") else ""
+        return (
+            f'<td><img src="{match["image_path"]}" loading="lazy" alt="">'
+            f'<div class="meta">{match["latency_s"]:.1f}s {badge}</div>{note}</td>'
+        )
+
+    summary_rows = "".join(
+        f"<tr><td class='name'>{p}</td>"
+        f"<td>{ops[p]['succeeded']}/{ops[p]['attempts']} ({ops[p]['success_rate']}%)</td>"
+        f"<td>{ops[p]['median_latency_s'] if ops[p]['median_latency_s'] is not None else '—'}</td>"
+        f"<td>{ops[p]['p90_latency_s'] if ops[p]['p90_latency_s'] is not None else '—'}</td>"
+        f"<td>${ops[p]['est_cost_usd']}</td>"
+        + "".join(
+            f"<td>{ops[p]['axis_scores'].get(a) or '—'}</td>"
+            for a in axes
+        )
+        + f"<td class='overall'>{ops[p]['overall_score'] or '—'}</td></tr>"
+        for p in providers
+    )
+
+    grid_rows = ""
+    for axis in axes:
+        axis_prompts = [p for p in prompts if p["axis"] == axis]
+        grid_rows += f'<tr class="axis-row"><td colspan="{len(providers) + 1}">{axis}</td></tr>'
+        for spec in axis_prompts:
+            prompt_text = " ".join(spec["prompt"].split())
+            grid_rows += (
+                f'<tr><td class="prompt"><strong>{spec["id"]}</strong>'
+                f'<div class="detail">{prompt_text}</div></td>'
+                + "".join(cell(p, spec["id"]) for p in providers)
+                + "</tr>"
+            )
+
+    axis_headers = "".join(f"<th>{a}</th>" for a in axes)
+    provider_headers = "".join(f"<th>{p}</th>" for p in providers)
+
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genai-image-bench · {payload['run_id']}</title>
+<style>
+  :root {{ --bg:#fbfbfa; --fg:#1a1a18; --muted:#6b6b66; --line:#e3e3df; --accent:#1f6f54; }}
+  @media (prefers-color-scheme: dark) {{
+    :root {{ --bg:#17171a; --fg:#ececea; --muted:#9a9a95; --line:#2e2e32; --accent:#5fcfa4; }}
+  }}
+  * {{ box-sizing:border-box; }}
+  body {{ margin:0; padding:32px 16px; background:var(--bg); color:var(--fg);
+    font:15px/1.5 ui-sans-serif,-apple-system,"Segoe UI",sans-serif; }}
+  .wrap {{ max-width:1200px; margin:0 auto; }}
+  h1 {{ font-size:22px; margin:0 0 4px; }}
+  .sub {{ color:var(--muted); font-size:13px; margin-bottom:28px; }}
+  h2 {{ font-size:15px; text-transform:uppercase; letter-spacing:.07em;
+    color:var(--muted); margin:36px 0 12px; }}
+  table {{ width:100%; border-collapse:collapse; font-size:13px; }}
+  th,td {{ border:1px solid var(--line); padding:8px 10px; text-align:left;
+    vertical-align:top; }}
+  th {{ background:color-mix(in srgb, var(--fg) 5%, transparent);
+    font-weight:600; font-size:12px; }}
+  .name,.overall {{ font-weight:600; }}
+  .axis-row td {{ background:color-mix(in srgb, var(--accent) 12%, transparent);
+    font-weight:600; text-transform:uppercase; letter-spacing:.06em; font-size:12px; }}
+  .prompt {{ width:230px; }}
+  .detail {{ color:var(--muted); font-size:12px; margin-top:4px; }}
+  img {{ width:100%; max-width:230px; border-radius:4px; display:block; }}
+  .meta {{ color:var(--muted); font-size:12px; margin-top:6px; }}
+  .score {{ color:var(--accent); font-weight:600; }}
+  .fail .tag {{ color:#c0392b; font-weight:600; font-size:12px; }}
+  .miss {{ color:var(--muted); text-align:center; }}
+  footer {{ margin-top:40px; padding-top:16px; border-top:1px solid var(--line);
+    color:var(--muted); font-size:12px; }}
+</style></head><body><div class="wrap">
+<h1>genai-image-bench</h1>
+<div class="sub">run {payload['run_id']} · generated {payload['generated_at']} ·
+scored blind, unblinded at report time</div>
+
+<h2>Summary</h2>
+<table><thead><tr><th>provider</th><th>success</th><th>median latency</th>
+<th>p90 latency</th><th>est. cost</th>{axis_headers}<th>overall</th></tr></thead>
+<tbody>{summary_rows}</tbody></table>
+
+<h2>Outputs</h2>
+<table><thead><tr><th>prompt</th>{provider_headers}</tr></thead>
+<tbody>{grid_rows}</tbody></table>
+
+<footer>
+Scores are from a single human scorer on a small prompt set and indicate direction,
+not statistical significance. Cost figures are estimates from published per-image
+pricing, not measured billing. Free-tier endpoints may differ from paid tiers in
+resolution and throughput, so latency here is not representative of paid performance.
+</footer>
+</div></body></html>"""
