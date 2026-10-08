@@ -33,9 +33,8 @@ def resolve_run(run_id: str) -> Path:
 
 
 def main() -> None:
-    # Windows stdout defaults to the locale codepage (cp1252 here), which cannot
-    # encode the glyphs this CLI prints: redirecting output to a file or pipe
-    # raises UnicodeEncodeError. The console itself is already UTF-8.
+    # Windows stdout is the locale codepage when redirected, which cannot encode
+    # the glyphs this CLI prints. The console itself is already UTF-8.
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")

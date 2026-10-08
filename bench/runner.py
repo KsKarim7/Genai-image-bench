@@ -1,13 +1,11 @@
 """Async execution of the prompt suite across providers.
 
-Concurrency is capped per provider because the rate gate is per key. Measured: six
-simultaneous Pollinations requests returned five HTTP 402s and a timeout and zero
-images, where the same prompts issued sequentially all succeeded. Providers are
-independent coroutines with their own clients, so the cap is not about one provider
-starving another -- there is nothing shared to contend for.
+Concurrency is capped per provider because the rate gate is per key: six simultaneous
+Pollinations requests returned five 402s, a timeout and no images, where the same
+prompts issued sequentially all succeeded.
 
-Retries are bounded and backed off. A request that exhausts them is recorded as a
-failure with its reason, since failure rate is part of what is being measured.
+A request that exhausts its bounded retries is recorded as a failure with its reason,
+since failure rate is part of what is being measured.
 """
 
 from __future__ import annotations
@@ -32,9 +30,8 @@ from .providers import (
 
 REQUEST_TIMEOUT = httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=10.0)
 MAX_ATTEMPTS = 3
-# payment_required is retryable on evidence: the x402 gate is driven by request rate,
-# and backoff recovered 3 of 12 outputs in run 20261008-162624. http_client (4xx) and
-# refused are permanent, so retrying them only burns quota and delays the failure.
+# payment_required is retryable on evidence: the x402 gate is rate-driven and backoff
+# recovered 3 of 12 outputs in run 20261008-162624. 4xx and refusals are permanent.
 RETRYABLE = {"rate_limit", "payment_required", "timeout", "network", "http_server"}
 
 
@@ -77,9 +74,8 @@ async def _attempt(
             image = await provider.generate(client, prompt_text)
             latency = time.perf_counter() - started
 
-            # The blind id IS the filename, with no suffix: a .jpg beside a .png
-            # partitions the set by provider. Real format is recorded in meta and
-            # the scorer views images through an <img> tag, which sniffs content.
+            # The blind id is the whole filename: a .jpg beside a .png partitions
+            # the set by provider. Real format goes in meta.
             filename = blind_id
             (images_dir / filename).write_bytes(image.data)
 
@@ -106,9 +102,6 @@ async def _attempt(
             if last_kind not in RETRYABLE or attempt == MAX_ATTEMPTS:
                 break
 
-            # Exponential backoff with jitter. Jitter matters because every provider
-            # starts its suite at the same instant; without it the retries collide
-            # on the same schedule and we re-trigger the rate limit we backed off from.
             # A server that says when to come back beats guessing with our own curve.
             hinted = provider.retry_after_seconds(exc)
             delay = hinted if hinted is not None else (2 ** attempt) + random.uniform(0, 1.5)
@@ -132,9 +125,12 @@ async def _run_provider(
     prompts: list[dict],
     images_dir: Path,
 ) -> list[GenerationResult]:
-    # The slot is deliberately held across the backoff sleep. When the limit is a
-    # rate gate, not issuing the next request is the entire point; releasing it
-    # here would let a sibling prompt fire into the gate we just backed off from.
+    # The slot is held across the backoff sleep on purpose: when the limit is a rate
+    # gate, not issuing the next request is the point. Do not "fix" this to release.
+    #
+    # TODO: one semaphore per provider, but the gate is per key. Two adapters sharing
+    # one credential (two Gemini models, say) would get a cap each and double the
+    # concurrency against one quota. Needs a quota_key, defaulting to name.
     sem = asyncio.Semaphore(provider.max_concurrency)
     results: list[GenerationResult] = []
 
@@ -160,10 +156,10 @@ def _group_key(spec: dict) -> str | None:
 def build_units(prompts: list[dict], results: list[GenerationResult]) -> list[dict]:
     """Group successful outputs into scoring units.
 
-    Prompts sharing a consistency_group or style_group are one unit, judged as a
-    set: "same individual as cc_01" cannot be answered one shuffled image at a
-    time. A unit never spans providers, so presenting the set keeps it blind.
-    Members are ordered as the suite declares them, so the reference comes first.
+    Prompts sharing a consistency_group or style_group are one unit, judged as a set:
+    whether three images show one individual cannot be answered one shuffled image at
+    a time. A unit never spans providers, so presenting the set keeps it blind.
+    Members follow suite order, so a consistency group reference comes first.
     """
     specs = {p["id"]: p for p in prompts}
     order = {p["id"]: i for i, p in enumerate(prompts)}
@@ -264,7 +260,6 @@ async def run(config_path: Path, runs_dir: Path, axis: str | None = None) -> str
     print(f"  prompts:   {len(prompts)}")
 
     all_results: list[GenerationResult] = []
-    # Providers run concurrently with each other; each polices its own rate limit.
     gathered = await asyncio.gather(
         *(_run_provider(p, prompts, images_dir) for p in providers)
     )

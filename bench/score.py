@@ -1,11 +1,8 @@
 """Blind scoring pass.
 
-Reads scoring_manifest.json and nothing else. The manifest carries no provider
-name and no field that joins to one, so this module cannot leak an identity it
-never loads. Scores are keyed by unit id; report.py does the unblinding.
-
-Unblinded, the scorer knows which output came from the model they expect to win
-and that expectation moves the number. Avoiding that is the point of the project.
+Reads scoring_manifest.json and nothing else: the manifest carries no provider name
+and no field that joins to one, so this module cannot leak what it never loads.
+Scores are keyed by unit id; report.py does the unblinding.
 """
 
 from __future__ import annotations
@@ -28,7 +25,7 @@ _VIEW_CSS = """
          margin:0; padding:28px; background:#17171a; color:#ececea; }
   h1 { font-size:14px; text-transform:uppercase; letter-spacing:.08em;
        color:#9a9a95; margin:0 0 6px; }
-  .scale { color:#9a9a95; font-size:13px; margin-bottom:22px; }
+  .anchors { color:#9a9a95; font-size:13px; margin-bottom:22px; }
   .grid { display:flex; flex-wrap:wrap; gap:22px; align-items:flex-start; }
   figure { margin:0; max-width:380px; }
   img { width:100%; border-radius:6px; display:block; background:#000; }
@@ -76,7 +73,7 @@ def _view_html(unit: dict, run_dir: Path) -> str:
         f"<title>{html.escape(unit['unit_id'])}</title>"
         "<style>" + _VIEW_CSS + "</style></head><body>"
         f"<h1>{html.escape(unit['axis'])}</h1>"
-        f"<div class=\"scale\">{html.escape(unit['anchors'])}</div>"
+        f"<div class=\"anchors\">{html.escape(unit['anchors'])}</div>"
         f"<div class=\"grid\">{''.join(cards)}</div>"
         "</body></html>"
     )

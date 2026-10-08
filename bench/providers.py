@@ -1,8 +1,7 @@
 """Provider adapters.
 
-Each provider hides its own auth, request shape and response parsing behind a single
-`generate()` coroutine returning a GenerationResult. Adding a provider means adding
-one class; the runner, scorer and report never learn provider-specific details.
+One class per provider, hiding its auth, request shape and response parsing behind
+generate(). Nothing downstream learns provider-specific details.
 """
 
 from __future__ import annotations
@@ -18,13 +17,9 @@ from typing import Optional
 
 import httpx
 
-# LIST prices, not measured spend: what a provider publishes per image on the tier
-# this harness uses. Every configured provider is on a free tier, so these are zero
-# and the report says "free tier" rather than "$0.00". README carries paid-tier list
-# prices as a separate reference table, cited and dated.
+# List prices, not measured spend. Standard tier, never batch: batch halves the
+# Gemini price and destroys the latency measurement. README has the cited table.
 LIST_PRICE_USD_PER_IMAGE = {
-    # Standard tier, not batch: batch halves the price but destroys the latency
-    # measurement, which is one of the things being compared.
     "gemini-3.1-flash-lite-image": 0.0336,
     "pollinations": 0.0,
     "huggingface": 0.0,
@@ -40,19 +35,15 @@ class GenerationResult:
     latency_s: float
     cost_usd: float = 0.0
     image_path: Optional[str] = None
-    # Failures are recorded, never silently dropped. The reason matters:
-    # a rate limit is an operational problem, a refusal is a content-policy
-    # problem, a parse error is an integration problem. Collapsing them into
-    # "failed" throws away the distinction a pipeline decision depends on.
-    # parse means an exchange we could not form or read; http_client is permanent,
-    # http_server and network are transient.
+    # http_client is permanent, http_server and network transient; parse means an
+    # exchange we could not form or read.
     error_kind: Optional[str] = None     # timeout | network | rate_limit | payment_required
                                          # | refused | http_client | http_server | parse | unknown
     error_detail: Optional[str] = None
     meta: dict = field(default_factory=dict)
 
-    # results.json is the one run artifact the scoring module reads, so it must
-    # carry no field that maps a blind id back to a provider.
+    # Defence in depth: results.json is not the scorer input any more, but it still
+    # must not map a blind id to a provider.
     _UNBLINDING = ("blind_id", "image_path")
 
     def to_results_row(self) -> dict:
@@ -167,9 +158,8 @@ class BaseProvider:
 class GeminiFlashLiteImage(BaseProvider):
     """Google Gemini 3.1 Flash Lite Image via generateContent.
 
-    Image data arrives inline as base64 in the candidate parts, beside any prose the
-    model emits; the first inline image part wins. Named replacement for
-    gemini-2.5-flash-image, which is deprecated and has no free tier.
+    Image bytes arrive base64-inline among the candidate parts, beside any prose; the
+    first inline part wins. Replaces gemini-2.5-flash-image, now deprecated.
     """
 
     name = "gemini-3.1-flash-lite-image"
@@ -220,11 +210,7 @@ class GeminiFlashLiteImage(BaseProvider):
 
 
 class Pollinations(BaseProvider):
-    """Keyless endpoint. Included as a zero-friction baseline.
-
-    No auth means no quota guarantees either, so treat its latency numbers as
-    indicative only — they include whatever queueing the public endpoint is doing.
-    """
+    """Keyless endpoint, kept as a zero-friction baseline."""
 
     name = "pollinations"
     # Measured: 6 simultaneous requests gave 5x HTTP 402 and one timeout, zero
@@ -232,9 +218,8 @@ class Pollinations(BaseProvider):
     max_concurrency = 1
 
     async def generate(self, client: httpx.AsyncClient, prompt: str) -> GeneratedImage:
-        # quote(safe="") and not httpx.URL(path=...): the latter leaves "/"
-        # unescaped so a prompt can inject path segments, and raises InvalidURL
-        # on "?" or "#".
+        # quote(safe="") not httpx.URL(path=...): that leaves "/" unescaped so a
+        # prompt can inject path segments, and raises InvalidURL on "?" or "#".
         resp = await client.get(
             "https://image.pollinations.ai/prompt/" + urllib.parse.quote(prompt, safe=""),
             params={"nologo": "true"},
@@ -245,8 +230,7 @@ class Pollinations(BaseProvider):
         if not content_type.startswith("image/"):
             raise ValueError(f"expected image bytes, got content-type={content_type!r}")
         # A cache hit bypasses the rate gate and returns in a fraction of the
-        # generation time, so a run that does not record this cannot tell a
-        # latency measurement from a CDN read.
+        # generation time, so without this a CDN read looks like a measurement.
         return GeneratedImage(
             resp.content,
             content_type,
@@ -257,11 +241,13 @@ class Pollinations(BaseProvider):
         )
 
 
+# TODO: HF has never run -- no token configured, and its 503 cold start is not
+# retried. Decide whether it belongs in the roster or should come out.
 class HuggingFaceInference(BaseProvider):
-    """Hugging Face Inference API. Model is configurable via HF_IMAGE_MODEL.
+    """Hugging Face Inference API; model set by HF_IMAGE_MODEL.
 
-    Returns raw image bytes on success and a JSON error body otherwise, including
-    the 503 'model loading' case which we surface rather than silently waiting out.
+    503 means a cold start. Surfaced rather than waited out, and not retried -- see
+    the README limitations.
     """
 
     name = "huggingface"
@@ -297,11 +283,7 @@ ALL_PROVIDERS: list[type[BaseProvider]] = [
 
 
 def load_available() -> list[BaseProvider]:
-    """Instantiate every provider, skipping those without credentials.
-
-    A missing key is a normal condition, not an error — the run proceeds with
-    whatever is configured so the harness is useful before you have every key.
-    """
+    """Instantiate every provider, skipping those with no credentials."""
     live: list[BaseProvider] = []
     for cls in ALL_PROVIDERS:
         inst = cls()

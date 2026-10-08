@@ -87,9 +87,8 @@ def build_report(run_dir: Path) -> Path:
         reports_cache = any(st is not None for st in states)
         hit_lat = [r["latency_s"] for r, st in zip(ok_rows, states) if st == "HIT"]
         miss_lat = [r["latency_s"] for r, st in zip(ok_rows, states) if st == "MISS"]
-        # A provider reporting no cache status has every success counted as
-        # generated. Where it does report one, only the misses measure the
-        # provider: a hit is a CDN read and says nothing about the model.
+        # Where a provider reports cache status, only the misses measure it: a hit
+        # is a CDN read. Where it reports none, every success counts as generated.
         gen_lat = miss_lat if reports_cache else [r["latency_s"] for r in ok_rows]
 
         ops[provider] = {
@@ -131,6 +130,10 @@ def build_report(run_dir: Path) -> Path:
         ops[provider]["axis_scores"] = {
             axis: _mean(by_provider_axis.get((provider, axis), [])) for axis in axes
         }
+        # TODO: overall_score is an unweighted mean over units, so prompt_fidelity
+        # and text_rendering (3 units each) outweigh character_consistency and
+        # style_adherence (1 set each) three to one. Mean of axis means would weight
+        # the four axes equally. Which is right depends on which axes matter.
         all_scores = [s for axis in axes for s in by_provider_axis.get((provider, axis), [])]
         ops[provider]["overall_score"] = _mean(all_scores)
         ops[provider]["n_scored"] = len(all_scores)
@@ -142,7 +145,6 @@ def build_report(run_dir: Path) -> Path:
         encoding="utf-8",
     )
 
-    # Console summary so the numbers are visible without opening the file.
     print(f"\n  {'provider':<22}{'ok%':>7}{'gen s':>8}  {'cache':>14}{'score':>8}  failures")
     for provider in providers:
         o = ops[provider]
@@ -286,8 +288,8 @@ Latency columns marked "generated" exclude cache hits; a cache read measures the
 provider's CDN, not the model, so the two are never averaged. A provider that served
 only cache hits has no latency measurement in this run.
 Scores are from a single human scorer on a small prompt set and indicate direction,
-not statistical significance. Cost figures are estimates from published per-image
-pricing, not measured billing. Free-tier endpoints may differ from paid tiers in
-resolution and throughput, so latency here is not representative of paid performance.
+not statistical significance. Cost is list price times successful images, not billing
+read from an invoice. Free-tier endpoints may differ from paid tiers in resolution and
+throughput, so latency here is not representative of paid performance.
 </footer>
 </div></body></html>"""
