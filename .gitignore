@@ -1,0 +1,10 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# runs/ is intentionally NOT ignored — committed runs are the evidence that the
+# harness was actually executed. If image volume becomes a problem, commit the
+# JSON and report and ignore runs/*/images/ instead.
