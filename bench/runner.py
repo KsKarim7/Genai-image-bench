@@ -1,10 +1,13 @@
 """Async execution of the prompt suite across providers.
 
-Concurrency is capped per provider rather than globally, because free tiers rate-limit
-per key and one aggressive provider would otherwise starve the others. Retries use
-exponential backoff and are bounded; a request that exhausts its retries is recorded
-as a failure with its reason rather than dropped, since failure rate is part of what
-this benchmark is measuring.
+Concurrency is capped per provider because the rate gate is per key. Measured: six
+simultaneous Pollinations requests returned five HTTP 402s and a timeout and zero
+images, where the same prompts issued sequentially all succeeded. Providers are
+independent coroutines with their own clients, so the cap is not about one provider
+starving another -- there is nothing shared to contend for.
+
+Retries are bounded and backed off. A request that exhausts them is recorded as a
+failure with its reason, since failure rate is part of what is being measured.
 """
 
 from __future__ import annotations
@@ -121,6 +124,9 @@ async def _run_provider(
     repeats: int,
     images_dir: Path,
 ) -> list[GenerationResult]:
+    # The slot is deliberately held across the backoff sleep. When the limit is a
+    # rate gate, not issuing the next request is the entire point; releasing it
+    # here would let a sibling prompt fire into the gate we just backed off from.
     sem = asyncio.Semaphore(provider.max_concurrency)
     results: list[GenerationResult] = []
 
@@ -141,45 +147,95 @@ async def _run_provider(
     return results
 
 
-def build_blind_map(results: list[GenerationResult]) -> dict[str, dict]:
-    """Collect the blind id -> provider mapping for every successful output.
-
-    Ids are minted at generation time and used as the image filenames, so this
-    file is the only artifact that knows which provider produced what. Nothing
-    the scorer reads carries both a blind id and a provider name.
-    """
-    return {res.blind_id: res.to_blind_entry() for res in results if res.ok}
+def _group_key(spec: dict) -> str | None:
+    return spec.get("consistency_group") or spec.get("style_group")
 
 
-def build_scoring_manifest(
-    run_id: str, axes: dict, prompts: list[dict], results: list[GenerationResult]
-) -> dict:
-    """The scorer's only input.
+def build_units(prompts: list[dict], results: list[GenerationResult]) -> list[dict]:
+    """Group successful outputs into scoring units.
 
-    Carries no provider and nothing that joins to one: no bytes, no latency, no
-    content type, and no prompt id. Each unit is one scoring decision.
+    Prompts sharing a consistency_group or style_group are one unit, judged as a
+    set: "same individual as cc_01" cannot be answered one shuffled image at a
+    time. A unit never spans providers, so presenting the set keeps it blind.
+    Members are ordered as the suite declares them, so the reference comes first.
     """
     specs = {p["id"]: p for p in prompts}
-    units = []
+    order = {p["id"]: i for i, p in enumerate(prompts)}
+    units: dict[tuple, dict] = {}
+
     for res in results:
         if not res.ok:
             continue
         spec = specs[res.prompt_id]
-        units.append(
+        group = _group_key(spec)
+        key = (res.provider, group) if group else (res.provider, res.prompt_id, res.repeat)
+        unit = units.setdefault(
+            key,
             {
-                "unit_id": res.blind_id,
+                "unit_id": uuid.uuid4().hex[:10],
+                "provider": res.provider,
                 "axis": spec["axis"],
-                "scale": axes[spec["axis"]]["scale"],
-                "images": [res.image_path],
+                "group": group,
+                "members": [],
+            },
+        )
+        unit["members"].append(res)
+
+    for unit in units.values():
+        unit["members"].sort(key=lambda r: order[r.prompt_id])
+    return list(units.values())
+
+
+def build_blind_map(units: list[dict]) -> dict[str, dict]:
+    """The only artifact that knows which provider produced what.
+
+    images maps an image id to its provider; units maps a scoring unit to the
+    provider and the image ids it covers. Nothing the scorer reads holds either.
+    """
+    return {
+        "images": {
+            res.blind_id: res.to_blind_entry() for u in units for res in u["members"]
+        },
+        "units": {
+            u["unit_id"]: {
+                "provider": u["provider"],
+                "axis": u["axis"],
+                "group": u["group"],
+                "image_ids": [res.blind_id for res in u["members"]],
+            }
+            for u in units
+        },
+    }
+
+
+def build_scoring_manifest(
+    run_id: str, axes: dict, prompts: list[dict], units: list[dict]
+) -> dict:
+    """The scorer's only input.
+
+    Carries no provider and nothing that joins to one: no bytes, no latency, no
+    content type, no prompt id. One entry per scoring decision.
+    """
+    specs = {p["id"]: p for p in prompts}
+    return {
+        "run_id": run_id,
+        "units": [
+            {
+                "unit_id": u["unit_id"],
+                "axis": u["axis"],
+                "scale": axes[u["axis"]]["scale"],
+                "images": [res.image_path for res in u["members"]],
                 "prompts": [
                     {
-                        "prompt": " ".join(spec["prompt"].split()),
-                        "checks": spec["checks"],
+                        "prompt": " ".join(specs[res.prompt_id]["prompt"].split()),
+                        "checks": specs[res.prompt_id]["checks"],
                     }
+                    for res in u["members"]
                 ],
             }
-        )
-    return {"run_id": run_id, "units": units}
+            for u in units
+        ],
+    }
 
 
 async def run(
@@ -214,7 +270,8 @@ async def run(
     for batch in gathered:
         all_results.extend(batch)
 
-    blind_map = build_blind_map(all_results)
+    units = build_units(prompts, all_results)
+    blind_map = build_blind_map(units)
 
     (run_dir / "results.json").write_text(
         json.dumps(
@@ -234,12 +291,14 @@ async def run(
         json.dumps(blind_map, indent=2), encoding="utf-8"
     )
     (run_dir / "scoring_manifest.json").write_text(
-        json.dumps(build_scoring_manifest(run_id, axes, prompts, all_results), indent=2),
+        json.dumps(build_scoring_manifest(run_id, axes, prompts, units), indent=2),
         encoding="utf-8",
     )
 
     ok = sum(1 for r in all_results if r.ok)
+    sets = sum(1 for u in units if len(u["members"]) > 1)
     print(f"\n  {ok}/{len(all_results)} succeeded")
+    print(f"  {len(units)} scoring unit(s)" + (f", {sets} scored as sets" if sets else ""))
     print(f"  written to {run_dir}")
     print(f"\n  next: python run.py score {run_id}")
     return run_id

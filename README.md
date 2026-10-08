@@ -28,6 +28,17 @@ name appears nowhere the scorer can see it. `blind_map.json` is the only artifac
 that knows which provider produced which output, and it is read in exactly one place:
 `report.py`, after scoring is complete.
 
+The scorer's input is a purpose-built `scoring_manifest.json` holding only unit ids,
+axis, scale, image paths, prompt text and pass criteria. It carries no provider name
+and no field that joins to one: not response size, not latency, not content type, not
+prompt id. `score.py` reads that file and nothing else.
+
+**Sets are scored as sets.** Prompts declaring a `consistency_group` or `style_group`
+form one scoring unit per provider, presented together and given a single score.
+Asking whether three images show the same individual cannot be answered one shuffled
+image at a time, which is what the first implementation asked. A unit never spans
+providers, so showing the set together keeps it blind.
+
 **The rubric is fixed before the run.** Per-prompt pass criteria live in
 `config/prompts.yaml` and are written before any image is generated. Deciding what
 counts as success after seeing the outputs is how a comparison turns into a
@@ -66,6 +77,26 @@ Browsers content-sniff, so the report rendered correctly and the bug stayed invi
 — while JPEG compression artifacts sat directly on top of the style-adherence
 criteria, which ask the scorer to judge visible brush texture.
 
+Two further instances of the same pattern surfaced while fixing the first.
+
+**Second: `results.json` was an unblinding oracle.** `score.py` read it for prompt
+text, and every row in it carries `provider` beside `meta.bytes`. A file's size on
+disk is exactly `meta.bytes`, so the provider behind any image was recoverable by
+arithmetic, with `blind_map.json` never opened. The data structure handed to the
+scorer had been carefully stripped; the file it was read from had not. `latency_s`
+and `content_type` were two further join keys in the same row.
+
+**Third: the fix for the `.png` bug created a new leak.** Recording the real format
+made the extension track the response type, and response type tracks provider almost
+perfectly, so sorting the image folder by extension separated the providers without
+reading anything. Fixing one confound opened a channel. Filenames now carry no suffix
+at all, format lives in the metadata, and images reach the scorer through an `<img>`
+tag, which sniffs the bytes and does not need one.
+
+Three occurrences, two of them created or overlooked while examining the first, is
+the argument for `tests/test_blinding.py`. The property is one assertion to state and
+demonstrably easy to break by accident; a careful read had already missed it twice.
+
 ## What this does not claim
 
 - Scores come from a single human scorer on a small prompt set. They indicate
@@ -79,6 +110,20 @@ criteria, which ask the scorer to judge visible brush texture.
   provider's rate gate entirely. Only first-generation-on-fresh-prompts figures
   are measurements of the provider; `x-cache` is recorded per request so hits and
   misses can be separated.
+- Set-scored axes produce one score per provider per group, so character
+  consistency and style adherence each rest on a single judgement by a single
+  scorer. Where some generations in a group failed, the set is scored on the
+  images that exist, which is a weaker test of consistency than a full set.
+- Prompt ids appear inside some pass criteria ("same individual as cc_01"), so the
+  rubric text reaches the scorer. That is a weaker join back to `results.json` than
+  the ones closed above, and it is left in place because pass criteria are fixed
+  before the run and are not reworded mid-flight.
+- Hugging Face returns HTTP 503 while a model cold-starts. That is classified as an
+  integration error rather than a transient one, so it is not retried even though
+  the message says to retry. Cold starts need their own retry budget; not done.
+- Blind ids are 40 bits of UUID4 and run ids have one-second resolution. A collision
+  in either would silently overwrite data rather than fail. Negligible at this scale
+  and not guarded.
 - Free-tier endpoints may serve lower resolution or different quotas than paid
   tiers, so latency and quality figures here are not representative of paid-tier
   performance.
@@ -138,6 +183,7 @@ bench/runner.py      async execution, concurrency limits, backoff, failure captu
 bench/score.py       blind scoring CLI
 bench/report.py      unblinding and HTML comparison grid
 config/prompts.yaml  prompt suite and per-prompt pass criteria
+tests/               blinding regression checks
 run.py               entry point
 ```
 

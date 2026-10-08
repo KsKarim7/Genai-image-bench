@@ -46,10 +46,11 @@ def build_report(run_dir: Path) -> Path:
 
     results = payload["results"]
     prompts = payload["prompts"]
-    # results.json no longer carries image_path; the blind map is the only join.
+    # results.json carries no image_path; the blind map is the only join.
+    images = blind_map["images"]
     image_paths = {
         (rec["provider"], rec["prompt_id"], rec["repeat"]): rec["image_path"]
-        for rec in blind_map.values()
+        for rec in images.values()
     }
     prompts_by_id = {p["id"]: p for p in prompts}
     providers = sorted({r["provider"] for r in results})
@@ -93,12 +94,19 @@ def build_report(run_dir: Path) -> Path:
     # --- quality scores, unblinded here and only here -----------------------
     by_provider_axis: dict[tuple[str, str], list[float]] = defaultdict(list)
     score_by_image: dict[tuple[str, str], dict] = {}
-    for blind_id, record in blind_map.items():
-        entry = scores.get(blind_id)
+    for unit_id, unit in blind_map["units"].items():
+        entry = scores.get(unit_id)
         if not entry or entry.get("score") is None:
             continue
-        by_provider_axis[(record["provider"], entry["axis"])].append(entry["score"])
-        score_by_image[(record["provider"], record["prompt_id"])] = entry
+        # One score per unit, so a set of three images contributes one number.
+        by_provider_axis[(unit["provider"], entry["axis"])].append(entry["score"])
+        is_set = len(unit["image_ids"]) > 1
+        for image_id in unit["image_ids"]:
+            record = images[image_id]
+            score_by_image[(record["provider"], record["prompt_id"])] = {
+                **entry,
+                "set": is_set,
+            }
 
     axes = sorted({p["axis"] for p in prompts})
     for provider in providers:
@@ -157,7 +165,10 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
             )
         src = image_paths.get((provider, prompt_id, 1))
         entry = score_by_image.get((provider, prompt_id))
-        badge = f'<span class="score">{entry["score"]}/5</span>' if entry else ""
+        badge = ""
+        if entry:
+            mark = " set" if entry.get("set") else ""
+            badge = f'<span class="score">{entry["score"]}/5{mark}</span>' 
         note = f'<div class="detail">{esc(entry["note"])}</div>' if entry and entry.get("note") else ""
         return (
             f'<td><img src="{esc(src)}" loading="lazy" alt="">'
