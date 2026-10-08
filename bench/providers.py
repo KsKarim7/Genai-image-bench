@@ -155,15 +155,32 @@ class BaseProvider:
         return min(max((when - datetime.now(timezone.utc)).total_seconds(), 0.0), cap)
 
 
-class GeminiFlashLiteImage(BaseProvider):
-    """Google Gemini 3.1 Flash Lite Image via generateContent.
+def _refusal_reason(node: dict) -> str | None:
+    """Only a known refusal value counts. The /interactions refusal shape is
+    undocumented, so anything unrecognised stays a parse error with the body
+    attached rather than being guessed into the wrong bucket."""
+    for key in ("blockReason", "block_reason", "finishReason", "finish_reason"):
+        value = node.get(key)
+        if isinstance(value, str) and value.upper() in _REFUSAL_FINISH_REASONS:
+            return f"{key}={value}"
+    feedback = node.get("promptFeedback") or node.get("prompt_feedback") or {}
+    reason = feedback.get("blockReason") or feedback.get("block_reason")
+    return f"blockReason={reason}" if reason else None
 
-    Image bytes arrive base64-inline among the candidate parts, beside any prose; the
-    first inline part wins. Replaces gemini-2.5-flash-image, now deprecated.
+
+class GeminiFlashLiteImage(BaseProvider):
+    """Google Gemini 3.1 Flash Lite Image.
+
+    The 3.1 image models are not on models/{id}:generateContent: they take a
+    response_format on /v1beta/interactions and return the image under
+    interaction.outputImage. Lite emits 1K only, which is what its per-image
+    price is quoted against.
     """
 
     name = "gemini-3.1-flash-lite-image"
     model_id = "gemini-3.1-flash-lite-image"
+    image_size = "1K"
+    aspect_ratio = "1:1"
     max_concurrency = 2
 
     def __init__(self) -> None:
@@ -173,40 +190,52 @@ class GeminiFlashLiteImage(BaseProvider):
         return bool(self.api_key)
 
     async def generate(self, client: httpx.AsyncClient, prompt: str) -> GeneratedImage:
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{self.model_id}:generateContent"
-        )
         resp = await client.post(
-            url,
+            "https://generativelanguage.googleapis.com/v1beta/interactions",
             headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
-            json={"contents": [{"parts": [{"text": prompt}]}]},
+            json={
+                "model": self.model_id,
+                "input": [{"type": "text", "text": prompt}],
+                "response_format": {
+                    "type": "image",
+                    "aspect_ratio": self.aspect_ratio,
+                    "image_size": self.image_size,
+                },
+            },
         )
         resp.raise_for_status()
-        data = resp.json()
+        payload = resp.json()
+        interaction = payload.get("interaction") or payload
 
-        candidates = data.get("candidates") or []
-        if not candidates:
-            feedback = data.get("promptFeedback", {})
-            reason = feedback.get("blockReason")
-            if reason:
-                raise ContentRefused(f"blockReason={reason}")
-            raise ValueError(f"no candidates returned; feedback={feedback}")
+        image = (
+            interaction.get("outputImage")
+            or interaction.get("output_image")
+            or {}
+        )
+        if image.get("data"):
+            return GeneratedImage(
+                base64.b64decode(image["data"]),
+                image.get("mimeType") or image.get("mime_type") or "image/png",
+                {
+                    "model_version": interaction.get("model") or self.model_id,
+                    "interaction_id": interaction.get("id"),
+                    "image_size": self.image_size,
+                },
+            )
 
-        for part in candidates[0].get("content", {}).get("parts", []):
-            inline = part.get("inlineData") or part.get("inline_data")
-            if inline and inline.get("data"):
-                mime = inline.get("mimeType") or inline.get("mime_type") or "image/png"
-                return GeneratedImage(
-                    base64.b64decode(inline["data"]),
-                    mime,
-                    {"model_version": data.get("modelVersion")},
-                )
+        for step in interaction.get("steps") or []:
+            for part in step.get("content") or []:
+                if part.get("type") == "image" and part.get("data"):
+                    return GeneratedImage(
+                        base64.b64decode(part["data"]),
+                        part.get("mimeType") or "image/png",
+                        {"model_version": self.model_id, "image_size": self.image_size},
+                    )
 
-        finish = candidates[0].get("finishReason", "unknown")
-        if finish in _REFUSAL_FINISH_REASONS:
-            raise ContentRefused(f"finishReason={finish}")
-        raise ValueError(f"no inline image part in response (finishReason={finish})")
+        reason = _refusal_reason(interaction) or _refusal_reason(payload)
+        if reason:
+            raise ContentRefused(reason)
+        raise ValueError(f"no image in interaction response: {str(payload)[:200]}")
 
 
 class Pollinations(BaseProvider):
