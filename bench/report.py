@@ -36,9 +36,32 @@ def _p90(values: list[float]) -> float | None:
     return round(ordered[low] + (pos - low) * (ordered[high] - ordered[low]), 2)
 
 
+def _is_degenerate(unit: dict) -> bool:
+    """A grouped axis scored from one image.
+
+    Derived rather than read from the artifact, so runs recorded before the flag
+    existed are handled the same way. Such a score was given against set criteria
+    that mostly could not be answered, so it is not comparable to a real set score
+    and does not enter an axis mean.
+    """
+    return bool(unit.get("group")) and len(unit["image_ids"]) < 2
+
+
 def _cache_state(row: dict) -> str | None:
     state = (row["meta"].get("provider_meta") or {}).get("x_cache")
     return state.upper() if isinstance(state, str) else None
+
+
+def _overall_cell(o: dict, total_axes: int) -> str:
+    """An overall over two axes is not comparable to one over four, so the coverage
+    travels with the number instead of being left for the reader to infer."""
+    score = o["overall_score"]
+    if score is None:
+        return "—"
+    scored = o.get("axes_scored", total_axes)
+    if scored < total_axes:
+        return f"{score} <span class=\"qual\">{scored}/{total_axes} axes</span>"
+    return str(score)
 
 
 def _cost_cell(o: dict) -> str:
@@ -122,18 +145,25 @@ def build_report(run_dir: Path) -> Path:
     # --- quality scores, unblinded here and only here -----------------------
     by_provider_axis: dict[tuple[str, str], list[float]] = defaultdict(list)
     score_by_image: dict[tuple[str, str], dict] = {}
+    excluded_by_provider: dict[str, int] = defaultdict(int)
     for unit_id, unit in blind_map["units"].items():
         entry = scores.get(unit_id)
         if not entry or entry.get("score") is None:
             continue
-        # One score per unit, so a set of three images contributes one number.
-        by_provider_axis[(unit["provider"], entry["axis"])].append(entry["score"])
+        degenerate = _is_degenerate(unit)
+        if degenerate:
+            # Kept visible in the grid, kept out of the arithmetic.
+            excluded_by_provider[unit["provider"]] += 1
+        else:
+            # One score per unit, so a set of three images contributes one number.
+            by_provider_axis[(unit["provider"], entry["axis"])].append(entry["score"])
         is_set = len(unit["image_ids"]) > 1
         for image_id in unit["image_ids"]:
             record = images[image_id]
             score_by_image[(record["provider"], record["prompt_id"])] = {
                 **entry,
                 "set": is_set,
+                "excluded": degenerate,
             }
 
     axes = sorted({p["axis"] for p in prompts})
@@ -154,11 +184,14 @@ def build_report(run_dir: Path) -> Path:
         ops[provider]["n_scored"] = sum(
             len(by_provider_axis.get((provider, axis), [])) for axis in axes
         )
+        ops[provider]["excluded_singletons"] = excluded_by_provider.get(provider, 0)
 
     (run_dir / "summary.json").write_text(json.dumps(ops, indent=2), encoding="utf-8")
     html_path = run_dir / "report.html"
+    excluded_total = sum(excluded_by_provider.values())
     html_path.write_text(
-        _render_html(payload, ops, providers, axes, prompts, score_by_image, image_paths),
+        _render_html(payload, ops, providers, axes, prompts, score_by_image,
+                     image_paths, excluded_total),
         encoding="utf-8",
     )
 
@@ -181,7 +214,8 @@ def build_report(run_dir: Path) -> Path:
     return html_path
 
 
-def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_paths) -> str:
+def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_paths,
+                 excluded_total=0) -> str:
     def esc(value) -> str:
         return html.escape(str(value), quote=True)
 
@@ -204,8 +238,12 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
         entry = score_by_image.get((provider, prompt_id))
         badge = ""
         if entry:
-            mark = " set" if entry.get("set") else ""
-            badge = f'<span class="score">{entry["score"]}/5{mark}</span>' 
+            if entry.get("excluded"):
+                badge = (f'<span class="score excluded">{entry["score"]}/5 '
+                         "not counted</span>")
+            else:
+                mark = " set" if entry.get("set") else ""
+                badge = f'<span class="score">{entry["score"]}/5{mark}</span>' 
         note = f'<div class="detail">{esc(entry["note"])}</div>' if entry and entry.get("note") else ""
         return (
             f'<td><img src="{esc(src)}" loading="lazy" alt="">'
@@ -227,7 +265,7 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
             f"<td>{ops[p]['axis_scores'].get(a) or '—'}</td>"
             for a in axes
         )
-        + f"<td class='overall'>{ops[p]['overall_score'] or '—'}</td></tr>"
+        + f"<td class='overall'>{_overall_cell(ops[p], len(axes))}</td></tr>"
         for p in providers
     )
 
@@ -243,6 +281,14 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
                 + "".join(cell(p, spec["id"]) for p in providers)
                 + "</tr>"
             )
+
+    excluded_note = (
+        f"{excluded_total} score(s) are shown struck through and excluded from every "
+        "mean: a set-scored axis left with a single image by generation failures was "
+        "judged against criteria about a set, most of which cannot be answered from "
+        "one image. The score is the honest record of what was entered and is not a "
+        "comparable measurement. "
+    ) if excluded_total else ""
 
     axis_headers = "".join(f"<th>{esc(a)}</th>" for a in axes)
     provider_headers = "".join(f"<th>{esc(p)}</th>" for p in providers)
@@ -277,6 +323,8 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
   img {{ width:100%; max-width:230px; border-radius:4px; display:block; }}
   .meta {{ color:var(--muted); font-size:12px; margin-top:6px; }}
   .score {{ color:var(--accent); font-weight:600; }}
+  .score.excluded {{ color:var(--muted); font-weight:400;
+    text-decoration:line-through solid 1px; }}
   .qual {{ font-weight:400; text-transform:none; letter-spacing:0;
     color:var(--muted); font-size:11px; }}
   .cdn {{ color:var(--muted); }}
@@ -306,7 +354,7 @@ scored blind, unblinded at report time</div>
 <tbody>{grid_rows}</tbody></table>
 
 <footer>
-The per-axis columns are the result. "overall" is an unweighted mean across the four
+{excluded_note}The per-axis columns are the result. "overall" is an unweighted mean across the four
 axes, included only as a summary: it weights each axis equally regardless of how many
 prompts the suite happens to contain for it, and an aggregate hides exactly the
 per-axis differences this comparison exists to show.

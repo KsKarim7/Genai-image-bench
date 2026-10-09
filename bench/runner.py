@@ -223,6 +223,11 @@ def build_units(prompts: list[dict], results: list[GenerationResult]) -> list[di
 
     for unit in units.values():
         unit["members"].sort(key=lambda r: order[r.prompt_id])
+        # A grouped axis needs two images before its criteria mean anything: they ask
+        # whether a treatment holds across a set, and most of them cannot be answered
+        # from one image. Where generation failures leave a group with one survivor,
+        # the unit is degenerate: it is recorded, and it is not put to the scorer.
+        unit["degenerate"] = bool(unit["group"]) and len(unit["members"]) < 2
     return list(units.values())
 
 
@@ -241,6 +246,7 @@ def build_blind_map(units: list[dict]) -> dict[str, dict]:
                 "provider": u["provider"],
                 "axis": u["axis"],
                 "group": u["group"],
+                "degenerate": u["degenerate"],
                 "image_ids": [res.blind_id for res in u["members"]],
             }
             for u in units
@@ -262,6 +268,8 @@ def build_scoring_manifest(
     return {
         "run_id": run_id,
         "units": [
+            # Degenerate units are withheld: asking for a score against criteria that
+            # cannot be answered produces a number that looks like a measurement.
             {
                 "unit_id": u["unit_id"],
                 "axis": u["axis"],
@@ -277,6 +285,7 @@ def build_scoring_manifest(
                 ],
             }
             for u in units
+            if not u["degenerate"]
         ],
     }
 
@@ -336,8 +345,12 @@ async def run(config_path: Path, runs_dir: Path, axis: str | None = None) -> str
 
     ok = sum(1 for r in all_results if r.ok)
     sets = sum(1 for u in units if len(u["members"]) > 1)
+    withheld = sum(1 for u in units if u["degenerate"])
     print(f"\n  {ok}/{len(all_results)} succeeded")
-    print(f"  {len(units)} scoring unit(s)" + (f", {sets} scored as sets" if sets else ""))
+    print(f"  {len(units) - withheld} scoring unit(s)"
+          + (f", {sets} scored as sets" if sets else ""))
+    if withheld:
+        print(f"  {withheld} withheld: a grouped axis left with one image is not a set")
     print(f"  written to {run_dir}")
     print(f"\n  next: python run.py score {run_id}")
     return run_id

@@ -1,0 +1,746 @@
+{
+  "run_id": "20261009-074747",
+  "generated_at": "2026-10-09T07:50:11.691563+00:00",
+  "axes": {
+    "prompt_fidelity": {
+      "description": "Does the model satisfy explicit countable and spatial constraints? Art direction is largely constraints, so a model that renders beautifully but ignores \"three, on the left\" costs a human a re-roll every time.\n",
+      "anchors": "1 = constraints ignored, 3 = roughly half satisfied, 5 = all satisfied"
+    },
+    "text_rendering": {
+      "description": "Legible, correctly spelled text inside the image. The most common single reason a generated asset cannot ship without manual repair.\n",
+      "anchors": "1 = unreadable glyphs, 3 = readable with errors, 5 = exact and legible"
+    },
+    "character_consistency": {
+      "description": "The same character recognisable across separate generations. The hardest requirement for any narrative, storyboard or series use, and the one most likely to decide whether a model is usable in a pipeline at all.\n",
+      "anchors": "1 = unrelated subjects, 3 = same type, different individual, 5 = same individual"
+    },
+    "style_adherence": {
+      "description": "Holding a specified visual style rather than drifting to the model's own default aesthetic. Measured across a set, not a single image.\n",
+      "anchors": "1 = ignores style, 3 = partial, 5 = holds style across the set"
+    }
+  },
+  "prompts": [
+    {
+      "id": "pf_01",
+      "axis": "prompt_fidelity",
+      "prompt": "Three ceramic coffee cups on a wooden table, viewed from the front. The tallest cup is on the left, the shortest on the right. Exactly one cup is red.\n",
+      "checks": [
+        "exactly three cups present",
+        "tallest cup is leftmost",
+        "shortest cup is rightmost",
+        "exactly one cup is red"
+      ]
+    },
+    {
+      "id": "pf_02",
+      "axis": "prompt_fidelity",
+      "prompt": "A single orange cat sitting on a closed blue suitcase. The suitcase is on grass. No other animals or objects in frame.\n",
+      "checks": [
+        "exactly one cat",
+        "cat is orange",
+        "suitcase is blue and closed",
+        "no extra animals or objects"
+      ]
+    },
+    {
+      "id": "pf_03",
+      "axis": "prompt_fidelity",
+      "prompt": "An empty wooden chair facing away from the camera, in the centre of an otherwise bare room. One window on the right-hand wall.\n",
+      "checks": [
+        "chair faces away from camera",
+        "chair is centred",
+        "exactly one window, on the right",
+        "room is otherwise bare"
+      ]
+    },
+    {
+      "id": "tr_01",
+      "axis": "text_rendering",
+      "prompt": "A vintage enamel shop sign on a brick wall reading exactly: OPEN DAILY 7-5. Clean sans-serif capitals, high contrast.\n",
+      "checks": [
+        "text reads exactly 'OPEN DAILY 7-5'",
+        "all characters legible",
+        "no duplicated or invented extra words"
+      ]
+    },
+    {
+      "id": "tr_02",
+      "axis": "text_rendering",
+      "prompt": "A paperback book cover on a plain background. The title reads exactly 'THE LONG AFTERNOON' and below it, smaller, the word 'NOVEL'.\n",
+      "checks": [
+        "title reads exactly 'THE LONG AFTERNOON'",
+        "subtitle reads exactly 'NOVEL'",
+        "spelling correct in both"
+      ]
+    },
+    {
+      "id": "tr_03",
+      "axis": "text_rendering",
+      "prompt": "A hand-lettered chalkboard menu with three lines reading exactly: SOUP 4, BREAD 2, TEA 3.\n",
+      "checks": [
+        "all three lines present",
+        "numbers correct: 4, 2, 3",
+        "words spelled correctly"
+      ]
+    },
+    {
+      "id": "cc_01",
+      "axis": "character_consistency",
+      "consistency_group": "fox_courier",
+      "prompt": "Character sheet reference: a young fox courier with a torn left ear, a green canvas satchel and a red scarf. Flat 2D animation style, neutral grey background, standing facing the camera.\n"
+    },
+    {
+      "id": "cc_02",
+      "axis": "character_consistency",
+      "consistency_group": "fox_courier",
+      "prompt": "The same young fox courier with a torn left ear, green canvas satchel and red scarf, now running across a rooftop at dusk. Flat 2D animation style.\n"
+    },
+    {
+      "id": "cc_03",
+      "axis": "character_consistency",
+      "consistency_group": "fox_courier",
+      "prompt": "The same young fox courier with a torn left ear, green canvas satchel and red scarf, now sitting on a windowsill reading a letter. Flat 2D animation style.\n"
+    },
+    {
+      "id": "sa_01",
+      "axis": "style_adherence",
+      "style_group": "gouache_storybook",
+      "prompt": "A lighthouse on a cliff in heavy weather. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.\n"
+    },
+    {
+      "id": "sa_02",
+      "axis": "style_adherence",
+      "style_group": "gouache_storybook",
+      "prompt": "A fishing boat returning to a small harbour at dawn. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.\n"
+    },
+    {
+      "id": "sa_03",
+      "axis": "style_adherence",
+      "style_group": "gouache_storybook",
+      "prompt": "A row of terraced houses under rain. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.\n"
+    }
+  ],
+  "results": [
+    {
+      "provider": "pollinations",
+      "prompt_id": "pf_01",
+      "ok": true,
+      "latency_s": 4.348,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 36194,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "x_cache": "MISS",
+          "model": "sana",
+          "seed": 1359386624
+        }
+      }
+    },
+    {
+      "provider": "pollinations",
+      "prompt_id": "pf_02",
+      "ok": false,
+      "latency_s": 0.647,
+      "cost_usd": 0.0,
+      "error_kind": "payment_required",
+      "error_detail": "HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image",
+      "meta": {
+        "attempts": 3,
+        "backoff_s": [
+          2.2,
+          4.3
+        ]
+      }
+    },
+    {
+      "provider": "pollinations",
+      "prompt_id": "pf_03",
+      "ok": false,
+      "latency_s": 0.591,
+      "cost_usd": 0.0,
+      "error_kind": "payment_required",
+      "error_detail": "HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image",
+      "meta": {
+        "attempts": 3,
+        "backoff_s": [
+          2.3,
+          4.2
+        ]
+      }
+    },
+    {
+      "provider": "pollinations",
+      "prompt_id": "tr_01",
+      "ok": false,
+      "latency_s": 0.623,
+      "cost_usd": 0.0,
+      "error_kind": "payment_required",
+      "error_detail": "HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image",
+      "meta": {
+        "attempts": 3,
+        "backoff_s": [
+          2.2,
+          4.4
+        ]
+      }
+    },
+    {
+      "provider": "pollinations",
+      "prompt_id": "tr_02",
+      "ok": false,
+      "latency_s": 0.579,
+      "cost_usd": 0.0,
+      "error_kind": "payment_required",
+      "error_detail": "HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image",
+      "meta": {
+        "attempts": 3,
+        "backoff_s": [
+          3.4,
+          5.0
+        ]
+      }
+    },
+    {
+      "provider": "pollinations",
+      "prompt_id": "tr_03",
+      "ok": true,
+      "latency_s": 2.716,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 3,
+        "bytes": 61032,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "x_cache": "MISS",
+          "model": "sana",
+          "seed": 1435093762
+        }
+      }
+    },
+    {
+      "provider": "pollinations",
+      "prompt_id": "cc_01",
+      "ok": false,
+      "latency_s": 0.59,
+      "cost_usd": 0.0,
+      "error_kind": "payment_required",
+      "error_detail": "HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image",
+      "meta": {
+        "attempts": 3,
+        "backoff_s": [
+          2.4,
+          5.2
+        ]
+      }
+    },
+    {
+      "provider": "pollinations",
+      "prompt_id": "cc_02",
+      "ok": false,
+      "latency_s": 0.577,
+      "cost_usd": 0.0,
+      "error_kind": "payment_required",
+      "error_detail": "HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image",
+      "meta": {
+        "attempts": 3,
+        "backoff_s": [
+          2.7,
+          4.8
+        ]
+      }
+    },
+    {
+      "provider": "pollinations",
+      "prompt_id": "cc_03",
+      "ok": false,
+      "latency_s": 0.59,
+      "cost_usd": 0.0,
+      "error_kind": "payment_required",
+      "error_detail": "HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image",
+      "meta": {
+        "attempts": 3,
+        "backoff_s": [
+          3.2,
+          4.4
+        ]
+      }
+    },
+    {
+      "provider": "pollinations",
+      "prompt_id": "sa_01",
+      "ok": false,
+      "latency_s": 0.572,
+      "cost_usd": 0.0,
+      "error_kind": "payment_required",
+      "error_detail": "HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image",
+      "meta": {
+        "attempts": 3,
+        "backoff_s": [
+          3.3,
+          4.9
+        ]
+      }
+    },
+    {
+      "provider": "pollinations",
+      "prompt_id": "sa_02",
+      "ok": true,
+      "latency_s": 3.417,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 3,
+        "bytes": 48766,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "x_cache": "MISS",
+          "model": "sana",
+          "seed": 154033577
+        }
+      }
+    },
+    {
+      "provider": "pollinations",
+      "prompt_id": "sa_03",
+      "ok": false,
+      "latency_s": 0.571,
+      "cost_usd": 0.0,
+      "error_kind": "payment_required",
+      "error_detail": "HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image",
+      "meta": {
+        "attempts": 3,
+        "backoff_s": [
+          3.2,
+          4.8
+        ]
+      }
+    },
+    {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "pf_01",
+      "ok": true,
+      "latency_s": 2.894,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 260002,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "steps": 4
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "pf_02",
+      "ok": true,
+      "latency_s": 4.67,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 730897,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "steps": 4
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "pf_03",
+      "ok": true,
+      "latency_s": 2.431,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 291615,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "steps": 4
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "tr_01",
+      "ok": true,
+      "latency_s": 2.981,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 850642,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "steps": 4
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "tr_02",
+      "ok": true,
+      "latency_s": 2.864,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 252364,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "steps": 4
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "tr_03",
+      "ok": true,
+      "latency_s": 2.562,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 430890,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "steps": 4
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "cc_01",
+      "ok": true,
+      "latency_s": 2.098,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 166585,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "steps": 4
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "cc_02",
+      "ok": true,
+      "latency_s": 3.06,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 314193,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "steps": 4
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "cc_03",
+      "ok": true,
+      "latency_s": 3.206,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 339604,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "steps": 4
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "sa_02",
+      "ok": true,
+      "latency_s": 2.738,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 593872,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "steps": 4
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "sa_01",
+      "ok": true,
+      "latency_s": 3.664,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 637702,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "steps": 4
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "sa_03",
+      "ok": true,
+      "latency_s": 2.859,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 689576,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-1-schnell",
+          "steps": 4
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "pf_02",
+      "ok": true,
+      "latency_s": 13.271,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 752317,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-2-klein-4b"
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "pf_01",
+      "ok": true,
+      "latency_s": 19.044,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 500441,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-2-klein-4b"
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "tr_01",
+      "ok": true,
+      "latency_s": 11.889,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 852457,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-2-klein-4b"
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "pf_03",
+      "ok": true,
+      "latency_s": 16.903,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 441351,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-2-klein-4b"
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "tr_03",
+      "ok": true,
+      "latency_s": 12.42,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 816169,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-2-klein-4b"
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "tr_02",
+      "ok": true,
+      "latency_s": 17.4,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 343615,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-2-klein-4b"
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "cc_01",
+      "ok": true,
+      "latency_s": 9.466,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 226312,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-2-klein-4b"
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "cc_02",
+      "ok": true,
+      "latency_s": 13.965,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 572803,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-2-klein-4b"
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "cc_03",
+      "ok": true,
+      "latency_s": 17.508,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 283144,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-2-klein-4b"
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "sa_01",
+      "ok": true,
+      "latency_s": 22.8,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 848140,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-2-klein-4b"
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "sa_02",
+      "ok": true,
+      "latency_s": 13.429,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 799770,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-2-klein-4b"
+        }
+      }
+    },
+    {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "sa_03",
+      "ok": true,
+      "latency_s": 15.954,
+      "cost_usd": 0.0,
+      "error_kind": null,
+      "error_detail": null,
+      "meta": {
+        "attempts": 1,
+        "bytes": 845442,
+        "content_type": "image/jpeg",
+        "provider_meta": {
+          "model": "@cf/black-forest-labs/flux-2-klein-4b"
+        }
+      }
+    }
+  ]
+}

@@ -282,6 +282,92 @@ class SetCriteriaStatedOnce(unittest.TestCase):
                 self.assertIsNone(re.search(r"\b(?:pf|tr|cc|sa)_\d\d\b", check), check)
 
 
+class DegenerateSetUnits(unittest.TestCase):
+    """A grouped axis left with one surviving image is not a set.
+
+    Run 20261009-074747 put one to the scorer with the full set criteria --
+    "in every image", "throughout", "reads as one illustrated world" -- three of
+    which cannot be answered from a single image. It is recorded, withheld from
+    the scorer, and excluded from every mean.
+    """
+
+    def _units(self, survivors):
+        """survivors: prompt ids that succeeded for provider 'solo'."""
+        config, prompts = _load_suite()
+        results = [
+            GenerationResult(
+                provider="solo", prompt_id=spec["id"], blind_id=f"id{i:02d}",
+                ok=spec["id"] in survivors, latency_s=1.0,
+                image_path=f"images/id{i:02d}" if spec["id"] in survivors else None,
+                meta={"attempts": 1, "bytes": 1, "content_type": "image/png"},
+            )
+            for i, spec in enumerate(prompts)
+        ]
+        return config, prompts, build_units(prompts, results)
+
+    def test_a_one_image_group_is_flagged_degenerate(self):
+        _, _, units = self._units({"sa_02"})
+        sa = [u for u in units if u["group"] == "gouache_storybook"]
+        self.assertEqual(len(sa), 1)
+        self.assertEqual(len(sa[0]["members"]), 1)
+        self.assertTrue(sa[0]["degenerate"])
+
+    def test_a_two_image_group_is_not_degenerate(self):
+        _, _, units = self._units({"sa_01", "sa_02"})
+        sa = [u for u in units if u["group"] == "gouache_storybook"]
+        self.assertFalse(sa[0]["degenerate"])
+
+    def test_ungrouped_singletons_are_never_degenerate(self):
+        _, _, units = self._units({"pf_01", "tr_01"})
+        for unit in units:
+            if unit["group"] is None:
+                self.assertFalse(unit["degenerate"], unit["axis"])
+
+    def test_the_scorer_is_not_asked_to_score_one(self):
+        config, prompts, units = self._units({"sa_02", "pf_01"})
+        manifest = build_scoring_manifest("t", config, prompts, units)
+        degenerate_ids = {u["unit_id"] for u in units if u["degenerate"]}
+        self.assertTrue(degenerate_ids)
+        offered = {u["unit_id"] for u in manifest["units"]}
+        self.assertFalse(degenerate_ids & offered)
+        self.assertIn("prompt_fidelity", {u["axis"] for u in manifest["units"]})
+
+    def test_the_blind_map_still_records_it(self):
+        _, _, units = self._units({"sa_02"})
+        blind = build_blind_map(units)
+        degenerate = [u for u in blind["units"].values() if u["degenerate"]]
+        self.assertEqual(len(degenerate), 1)
+        self.assertEqual(len(degenerate[0]["image_ids"]), 1)
+
+    def test_report_keeps_the_score_visible_and_out_of_the_mean(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        run_dir, _ = _make_run(Path(tmp.name))
+        blind = json.loads((run_dir / "blind_map.json").read_text(encoding="utf-8"))
+
+        # Force one style_adherence unit down to a single image, as a real run did.
+        victim = next(uid for uid, u in blind["units"].items()
+                      if u["axis"] == "style_adherence" and len(u["image_ids"]) > 1)
+        provider = blind["units"][victim]["provider"]
+        blind["units"][victim]["image_ids"] = blind["units"][victim]["image_ids"][:1]
+        (run_dir / "blind_map.json").write_text(json.dumps(blind), encoding="utf-8")
+
+        scores = {uid: {"score": 5, "note": None, "axis": u["axis"]}
+                  for uid, u in blind["units"].items()}
+        (run_dir / "scores.json").write_text(json.dumps(scores), encoding="utf-8")
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            build_report(run_dir)
+        summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+        page = (run_dir / "report.html").read_text(encoding="utf-8")
+
+        self.assertEqual(summary[provider]["excluded_singletons"], 1)
+        # every other unit scored 5, so a counted 5 would have kept the mean at 5
+        self.assertIsNone(summary[provider]["axis_scores"]["style_adherence"])
+        self.assertIn("not counted", page)
+        self.assertIn("excluded from every", page)
+
+
 class FilenameIsTheBlindId(unittest.TestCase):
     """Covers the code path that names files, not just the shape of the result.
 

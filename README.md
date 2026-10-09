@@ -270,19 +270,111 @@ record rather than build output.
 
 ## Results
 
-<!-- TODO after group E. Leave empty until a real scored run exists. No placeholder
-     numbers. Cover:
-       - which provider won on which axis, and by how much
-       - the Pollinations x402 failure rate as a finding about free-tier
-         reliability, not as noise
-       - Pollinations latency split by cache hit and miss, with the caveat that
-         suite prompts were already warm by the time the reference run was made
-       - anything that contradicted expectation
-       - what the numbers do not support
-       - lead the Pollinations finding with fast, free and unreliable rather than
-         with the failure rate alone: 3.28s median against 15.71 and 32.50 is a real
-         advantage for anything that can absorb the failures
-       - report flux-1-schnell latency as three windows with their n, not pooled -->
+One run, `20261009-074747`: 12 prompts against three providers, 36 attempts, 27
+images, 19 scoring units of which 18 were scored and counted. Every request was
+cold — Pollinations carries a random seed, so nothing here was served from a cache.
+Scored blind by a single scorer and unblinded afterwards.
+
+### Operational
+
+| | success, 1st attempt | with retries | median latency | max | n |
+|---|---|---|---|---|---|
+| `cloudflare-flux-1-schnell` | **100.0%** | 100.0% | **2.88s** | 4.67s | 12 |
+| `cloudflare-flux-2-klein-4b` | **100.0%** | 100.0% | 14.96s | 22.80s | 12 |
+| `pollinations` | **8.3%** | **25.0%** | 3.42s | 4.35s | 3 |
+
+Both Workers AI models completed the suite. Pollinations returned 3 images from 12
+prompts; the other 9 were HTTP 402 payment challenges, each after three attempts.
+
+**Retries are what make Pollinations usable at all, and barely.** One request in
+twelve succeeded first time; three in twelve succeeded eventually. Reporting only the
+post-retry figure would hide that the provider effectively requires retry logic;
+reporting only the first-attempt figure would hide that retrying works. A pipeline
+decision turns on the gap between those two numbers.
+
+### Quality
+
+Blind scores, 1-5, one score per unit. Grouped axes are one score for a whole set,
+so their n is the number of sets and not the number of images.
+
+| | `flux-1-schnell` | `flux-2-klein-4b` | `pollinations` |
+|---|---|---|---|
+| prompt fidelity | 4.00 (n=3) | **5.00** (n=3) | 3.00 (n=1) |
+| text rendering | **3.33** (n=3) | 3.00 (n=3) | 1.00 (n=1) |
+| character consistency | **4.00** (1 set of 3) | 3.00 (1 set of 3) | not scored |
+| style adherence | 4.00 (1 set of 3) | 4.00 (1 set of 3) | excluded |
+| **overall** | 3.83 | 3.75 | 2.00 (2 of 4 axes) |
+
+**The two Workers AI models are indistinguishable overall.** 3.83 against 3.75 is a
+gap of 0.08 across eight scores each, which this design cannot resolve. The overall
+column is the least informative thing in the table and is only there because the
+per-axis figures are the result.
+
+**Per axis they differ, and in opposite directions.** klein-4b was perfect on prompt
+fidelity — 5, 5, 5, every countable and spatial constraint satisfied — where schnell
+scored 3, 5, 4 and missed on arrangement: *"leftmost is not clearly the tallest"*,
+*"chair is not exactly centered"*. schnell was better on character consistency, 4
+against 3, where klein-4b lost the distinguishing marking: *"left ear is not torned"*.
+Both scored 4 on style adherence. Each of those two axes rests on **one** set score
+per provider, which is the thinnest evidence in the table.
+
+**Text rendering is the worst axis for every provider**, at 3.33, 3.00 and 1.00. The
+scorer notes are specific and consistent: *"title mispelled"*, *"title is not exactly
+spelled"*, *"all characters are not legible and duplicates are present"*, *"extra
+stray 2 between BREAD and TEA"*, *"unreadable glyphs"*. Not one of the nine scored
+text prompts produced exactly the requested string. This is the one result the design
+predicted in advance, and it held across three unrelated models.
+
+### Pollinations: fast, free and unreliable, but not advantaged
+
+At 3.42s median it is fast in absolute terms and four times quicker than klein-4b,
+and it needs no credentials at all. Where it was scoreable it was weak: 3.00 on
+prompt fidelity and 1.00 on text rendering, the single lowest score recorded.
+
+An earlier framing in this project held that its speed was a real advantage for
+anything able to absorb the failures. **The final run does not support that.**
+flux-1-schnell returned a 2.88s median at 100% reliability — faster and complete.
+Pollinations only looked advantaged when compared against a slow window of
+flux-1-schnell, and the choice between them is not a speed trade at all.
+
+Its earlier 91.7% success rate was an artifact worth naming: ten of those twelve
+responses came from a one-year immutable cache warmed by this project's own
+debugging. Cold, across two runs of 12, it returned 41.7% and then 25.0%. Only the
+cold figures measure the provider, and they disagree by a factor of 1.7.
+
+### What contradicted expectation
+
+- **The cheaper, newer model was slower, not faster.** flux-2-klein-4b costs 104
+  Neurons an image against schnell's 58, and took five times as long — 14.96s against
+  2.88s — while scoring no better overall. Within one vendor and one API, price,
+  recency and latency did not line up.
+- **flux-1-schnell's latency is not a property of the model.** Four windows on
+  identical prompts: 27.4-58.6s (n=3), 1.92-7.22s (n=11), 5.18-38.34s (n=8),
+  2.10-4.67s (n=12). That is regime-switching, not variance, and it is why no pooled
+  figure is given for it.
+- **A benign prompt was refused as NSFW.** flux-1-schnell rejected the fox-courier
+  character sheet with `Input prompt contains NSFW content` on an earlier run. False
+  positives in a safety filter cost a production pipeline the same as a failure.
+- **The same provider error code meant two unrelated things.** Workers AI returns code
+  8007 for both a blocked prompt and a failed inference, one permanent and one
+  transient, distinguishable only by message text.
+
+### What these numbers do not support
+
+- **Any ranking of the two Workers AI models.** The overall gap is 0.08 and the two
+  axes that separate them rest on a single set score each.
+- **Any claim about Pollinations quality.** It contributed one scored unit per axis on
+  two of four axes, and nothing to character consistency. Those are anecdotes.
+- **Comparing the overall figures across all three providers.** Pollinations' 2.00
+  averages two axes where the others average four.
+- **Reading the style adherence row as complete.** Pollinations was given a 5 there,
+  against set criteria it could not satisfy from one surviving image, and that score
+  is excluded from every mean and shown struck through in the report.
+- **Statistical significance of anything.** One scorer, one run, 12 prompts, 18
+  counted scores spread across four axes and three providers.
+- **Text rendering as a solved problem for any of them**, nor as measured cleanly:
+  Pollinations renders at 768x768 and roughly a tenth of the bytes of the Workers AI
+  outputs, so some of its 1.00 belongs to its encoder.
 
 ## Repo layout
 

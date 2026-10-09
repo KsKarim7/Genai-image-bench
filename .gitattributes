@@ -6,3 +6,8 @@
 *.jpeg binary
 *.webp binary
 *.gif  binary
+
+# Committed run images carry no extension on purpose, so no suffix rule can
+# match them and nothing but content sniffing would stop eol normalisation
+# from corrupting the bytes. State it.
+runs/**/images/** binary

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genai-image-bench · 20261009-074747</title>
+<style>
+  :root { --bg:#fbfbfa; --fg:#1a1a18; --muted:#6b6b66; --line:#e3e3df; --accent:#1f6f54; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#17171a; --fg:#ececea; --muted:#9a9a95; --line:#2e2e32; --accent:#5fcfa4; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:32px 16px; background:var(--bg); color:var(--fg);
+    font:15px/1.5 ui-sans-serif,-apple-system,"Segoe UI",sans-serif; }
+  .wrap { max-width:1200px; margin:0 auto; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:28px; }
+  h2 { font-size:15px; text-transform:uppercase; letter-spacing:.07em;
+    color:var(--muted); margin:36px 0 12px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { border:1px solid var(--line); padding:8px 10px; text-align:left;
+    vertical-align:top; }
+  th { background:color-mix(in srgb, var(--fg) 5%, transparent);
+    font-weight:600; font-size:12px; }
+  .name,.overall { font-weight:600; }
+  .axis-row td { background:color-mix(in srgb, var(--accent) 12%, transparent);
+    font-weight:600; text-transform:uppercase; letter-spacing:.06em; font-size:12px; }
+  .prompt { width:230px; }
+  .detail { color:var(--muted); font-size:12px; margin-top:4px; }
+  img { width:100%; max-width:230px; border-radius:4px; display:block; }
+  .meta { color:var(--muted); font-size:12px; margin-top:6px; }
+  .score { color:var(--accent); font-weight:600; }
+  .score.excluded { color:var(--muted); font-weight:400;
+    text-decoration:line-through solid 1px; }
+  .qual { font-weight:400; text-transform:none; letter-spacing:0;
+    color:var(--muted); font-size:11px; }
+  .cdn { color:var(--muted); }
+  .fail .tag { color:#c0392b; font-weight:600; font-size:12px; }
+  .miss { color:var(--muted); text-align:center; }
+  footer { margin-top:40px; padding-top:16px; border-top:1px solid var(--line);
+    color:var(--muted); font-size:12px; }
+</style></head><body><div class="wrap">
+<h1>genai-image-bench</h1>
+<div class="sub">run 20261009-074747 · generated 2026-10-09T07:50:11.691563+00:00 ·
+scored blind, unblinded at report time</div>
+
+<h2>Summary</h2>
+<table><thead><tr><th>provider</th>
+<th>success<br><span class="qual">first attempt</span></th>
+<th>success<br><span class="qual">with retries</span></th>
+<th>median latency<br><span class="qual">generated</span></th>
+<th>max latency<br><span class="qual">generated</span></th>
+<th>cache</th>
+<th>cache read<br><span class="qual">CDN, not the model</span></th>
+<th>est. cost</th><th>format</th><th>character_consistency</th><th>prompt_fidelity</th><th>style_adherence</th><th>text_rendering</th>
+<th>overall<br><span class="qual">unweighted mean of the axes</span></th></tr></thead>
+<tbody><tr><td class='name'>cloudflare-flux-1-schnell</td><td>12/12 (100.0%)</td><td>12/12 (100.0%)</td><td>2.88</td><td>4.67</td><td>—</td><td class='cdn'>—</td><td>free tier</td><td>image/jpeg</td><td>4</td><td>4</td><td>4</td><td>3.33</td><td class='overall'>3.83</td></tr><tr><td class='name'>cloudflare-flux-2-klein-4b</td><td>12/12 (100.0%)</td><td>12/12 (100.0%)</td><td>14.96</td><td>22.8</td><td>—</td><td class='cdn'>—</td><td>free tier</td><td>image/jpeg</td><td>3</td><td>5</td><td>4</td><td>3</td><td class='overall'>3.75</td></tr><tr><td class='name'>pollinations</td><td>1/12 (8.3%)</td><td>3/12 (25.0%)</td><td>3.42</td><td>4.35</td><td>0 hit / 3 miss</td><td class='cdn'>—</td><td>free tier</td><td>image/jpeg</td><td>—</td><td>3</td><td>—</td><td>1</td><td class='overall'>2 <span class="qual">2/4 axes</span></td></tr></tbody></table>
+
+<h2>Outputs</h2>
+<table><thead><tr><th>prompt</th><th>cloudflare-flux-1-schnell</th><th>cloudflare-flux-2-klein-4b</th><th>pollinations</th></tr></thead>
+<tbody><tr class="axis-row"><td colspan="4">character_consistency</td></tr><tr><td class="prompt"><strong>cc_01</strong><div class="detail">Character sheet reference: a young fox courier with a torn left ear, a green canvas satchel and a red scarf. Flat 2D animation style, neutral grey background, standing facing the camera.</div></td><td><img src="images/c3a776b84c" loading="lazy" alt=""><div class="meta">2.1s <span class="score">4/5 set</span></div></td><td><img src="images/ace3735986" loading="lazy" alt=""><div class="meta">9.5s <span class="score">3/5 set</span></div><div class="detail">left ear is not torned</div></td><td class="fail"><span class="tag">payment_required</span><div class="detail">HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image</div></td></tr><tr><td class="prompt"><strong>cc_02</strong><div class="detail">The same young fox courier with a torn left ear, green canvas satchel and red scarf, now running across a rooftop at dusk. Flat 2D animation style.</div></td><td><img src="images/723eaf8eee" loading="lazy" alt=""><div class="meta">3.1s <span class="score">4/5 set</span></div></td><td><img src="images/1fa46c4bcc" loading="lazy" alt=""><div class="meta">14.0s <span class="score">3/5 set</span></div><div class="detail">left ear is not torned</div></td><td class="fail"><span class="tag">payment_required</span><div class="detail">HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image</div></td></tr><tr><td class="prompt"><strong>cc_03</strong><div class="detail">The same young fox courier with a torn left ear, green canvas satchel and red scarf, now sitting on a windowsill reading a letter. Flat 2D animation style.</div></td><td><img src="images/26ba7cc54b" loading="lazy" alt=""><div class="meta">3.2s <span class="score">4/5 set</span></div></td><td><img src="images/ea3b40b3f5" loading="lazy" alt=""><div class="meta">17.5s <span class="score">3/5 set</span></div><div class="detail">left ear is not torned</div></td><td class="fail"><span class="tag">payment_required</span><div class="detail">HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image</div></td></tr><tr class="axis-row"><td colspan="4">prompt_fidelity</td></tr><tr><td class="prompt"><strong>pf_01</strong><div class="detail">Three ceramic coffee cups on a wooden table, viewed from the front. The tallest cup is on the left, the shortest on the right. Exactly one cup is red.</div></td><td><img src="images/be8ffdde82" loading="lazy" alt=""><div class="meta">2.9s <span class="score">3/5</span></div><div class="detail">leftmost is not clearly the tallest, one of the cup is not fully and inconsistancy in the shape of one of the cups</div></td><td><img src="images/9d6ec5957e" loading="lazy" alt=""><div class="meta">19.0s <span class="score">5/5</span></div><div class="detail">all satisfied</div></td><td><img src="images/f390c43c21" loading="lazy" alt=""><div class="meta">4.3s <span class="score">3/5</span></div><div class="detail">leftmost one is not the tallest and rightmost one is not the shortest</div></td></tr><tr><td class="prompt"><strong>pf_02</strong><div class="detail">A single orange cat sitting on a closed blue suitcase. The suitcase is on grass. No other animals or objects in frame.</div></td><td><img src="images/3c2fd11eba" loading="lazy" alt=""><div class="meta">4.7s <span class="score">5/5</span></div><div class="detail">all checkpoints satisfied</div></td><td><img src="images/48eda67264" loading="lazy" alt=""><div class="meta">13.3s <span class="score">5/5</span></div><div class="detail">all satisfied</div></td><td class="fail"><span class="tag">payment_required</span><div class="detail">HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image</div></td></tr><tr><td class="prompt"><strong>pf_03</strong><div class="detail">An empty wooden chair facing away from the camera, in the centre of an otherwise bare room. One window on the right-hand wall.</div></td><td><img src="images/ed50eadc7b" loading="lazy" alt=""><div class="meta">2.4s <span class="score">4/5</span></div><div class="detail">chair is not exactly centered</div></td><td><img src="images/6c302385df" loading="lazy" alt=""><div class="meta">16.9s <span class="score">5/5</span></div><div class="detail">all checkpoints passed</div></td><td class="fail"><span class="tag">payment_required</span><div class="detail">HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image</div></td></tr><tr class="axis-row"><td colspan="4">style_adherence</td></tr><tr><td class="prompt"><strong>sa_01</strong><div class="detail">A lighthouse on a cliff in heavy weather. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.</div></td><td><img src="images/41b92ce555" loading="lazy" alt=""><div class="meta">3.7s <span class="score">4/5 set</span></div><div class="detail">one of the image doesn&#x27;t sense make</div></td><td><img src="images/d9057212f1" loading="lazy" alt=""><div class="meta">22.8s <span class="score">4/5 set</span></div></td><td class="fail"><span class="tag">payment_required</span><div class="detail">HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image</div></td></tr><tr><td class="prompt"><strong>sa_02</strong><div class="detail">A fishing boat returning to a small harbour at dawn. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.</div></td><td><img src="images/79fa20050c" loading="lazy" alt=""><div class="meta">2.7s <span class="score">4/5 set</span></div><div class="detail">one of the image doesn&#x27;t sense make</div></td><td><img src="images/98ab51fda1" loading="lazy" alt=""><div class="meta">13.4s <span class="score">4/5 set</span></div></td><td><img src="images/b2dff11c5f" loading="lazy" alt=""><div class="meta">3.4s <span class="score excluded">5/5 not counted</span></div><div class="detail">satisfied</div></td></tr><tr><td class="prompt"><strong>sa_03</strong><div class="detail">A row of terraced houses under rain. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.</div></td><td><img src="images/9d036e65b1" loading="lazy" alt=""><div class="meta">2.9s <span class="score">4/5 set</span></div><div class="detail">one of the image doesn&#x27;t sense make</div></td><td><img src="images/21e6941ebb" loading="lazy" alt=""><div class="meta">16.0s <span class="score">4/5 set</span></div></td><td class="fail"><span class="tag">payment_required</span><div class="detail">HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image</div></td></tr><tr class="axis-row"><td colspan="4">text_rendering</td></tr><tr><td class="prompt"><strong>tr_01</strong><div class="detail">A vintage enamel shop sign on a brick wall reading exactly: OPEN DAILY 7-5. Clean sans-serif capitals, high contrast.</div></td><td><img src="images/7468144a6b" loading="lazy" alt=""><div class="meta">3.0s <span class="score">3/5</span></div><div class="detail">text doesn&#x27;t read exactly stated , one of the word is incomplete</div></td><td><img src="images/a66fc8074b" loading="lazy" alt=""><div class="meta">11.9s <span class="score">2/5</span></div><div class="detail">all characters are not legible and duplicates are present</div></td><td class="fail"><span class="tag">payment_required</span><div class="detail">HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image</div></td></tr><tr><td class="prompt"><strong>tr_02</strong><div class="detail">A paperback book cover on a plain background. The title reads exactly &#x27;THE LONG AFTERNOON&#x27; and below it, smaller, the word &#x27;NOVEL&#x27;.</div></td><td><img src="images/14c7029141" loading="lazy" alt=""><div class="meta">2.9s <span class="score">3/5</span></div><div class="detail">title is not exactly spelled</div></td><td><img src="images/6fc730e497" loading="lazy" alt=""><div class="meta">17.4s <span class="score">3/5</span></div><div class="detail">title mispelled</div></td><td class="fail"><span class="tag">payment_required</span><div class="detail">HTTP 402: Payment required - 10000 USD Coin on eip155:8453 for Pollinations legacy image</div></td></tr><tr><td class="prompt"><strong>tr_03</strong><div class="detail">A hand-lettered chalkboard menu with three lines reading exactly: SOUP 4, BREAD 2, TEA 3.</div></td><td><img src="images/a966c94960" loading="lazy" alt=""><div class="meta">2.6s <span class="score">4/5</span></div><div class="detail">extra stray 2 between BREAD and TEA; all required text correct</div></td><td><img src="images/9d56873a96" loading="lazy" alt=""><div class="meta">12.4s <span class="score">4/5</span></div></td><td><img src="images/489193a6e3" loading="lazy" alt=""><div class="meta">2.7s <span class="score">1/5</span></div><div class="detail">unreadable glyphs</div></td></tr></tbody></table>
+
+<footer>
+1 score(s) are shown struck through and excluded from every mean: a set-scored axis left with a single image by generation failures was judged against criteria about a set, most of which cannot be answered from one image. The score is the honest record of what was entered and is not a comparable measurement. The per-axis columns are the result. "overall" is an unweighted mean across the four
+axes, included only as a summary: it weights each axis equally regardless of how many
+prompts the suite happens to contain for it, and an aggregate hides exactly the
+per-axis differences this comparison exists to show.
+Latency columns marked "generated" exclude cache hits; a cache read measures the
+provider's CDN, not the model, so the two are never averaged. A provider that served
+only cache hits has no latency measurement in this run.
+Scores are from a single human scorer on a small prompt set and indicate direction,
+not statistical significance. Cost is list price times successful images, not billing
+read from an invoice. Free-tier endpoints may differ from paid tiers in resolution and
+throughput, so latency here is not representative of paid performance.
+</footer>
+</div></body></html>

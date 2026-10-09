@@ -1,0 +1,301 @@
+{
+  "images": {
+    "f390c43c21": {
+      "provider": "pollinations",
+      "prompt_id": "pf_01",
+      "image_path": "images/f390c43c21"
+    },
+    "489193a6e3": {
+      "provider": "pollinations",
+      "prompt_id": "tr_03",
+      "image_path": "images/489193a6e3"
+    },
+    "b2dff11c5f": {
+      "provider": "pollinations",
+      "prompt_id": "sa_02",
+      "image_path": "images/b2dff11c5f"
+    },
+    "be8ffdde82": {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "pf_01",
+      "image_path": "images/be8ffdde82"
+    },
+    "3c2fd11eba": {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "pf_02",
+      "image_path": "images/3c2fd11eba"
+    },
+    "ed50eadc7b": {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "pf_03",
+      "image_path": "images/ed50eadc7b"
+    },
+    "7468144a6b": {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "tr_01",
+      "image_path": "images/7468144a6b"
+    },
+    "14c7029141": {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "tr_02",
+      "image_path": "images/14c7029141"
+    },
+    "a966c94960": {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "tr_03",
+      "image_path": "images/a966c94960"
+    },
+    "c3a776b84c": {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "cc_01",
+      "image_path": "images/c3a776b84c"
+    },
+    "723eaf8eee": {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "cc_02",
+      "image_path": "images/723eaf8eee"
+    },
+    "26ba7cc54b": {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "cc_03",
+      "image_path": "images/26ba7cc54b"
+    },
+    "41b92ce555": {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "sa_01",
+      "image_path": "images/41b92ce555"
+    },
+    "79fa20050c": {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "sa_02",
+      "image_path": "images/79fa20050c"
+    },
+    "9d036e65b1": {
+      "provider": "cloudflare-flux-1-schnell",
+      "prompt_id": "sa_03",
+      "image_path": "images/9d036e65b1"
+    },
+    "48eda67264": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "pf_02",
+      "image_path": "images/48eda67264"
+    },
+    "9d6ec5957e": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "pf_01",
+      "image_path": "images/9d6ec5957e"
+    },
+    "a66fc8074b": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "tr_01",
+      "image_path": "images/a66fc8074b"
+    },
+    "6c302385df": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "pf_03",
+      "image_path": "images/6c302385df"
+    },
+    "9d56873a96": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "tr_03",
+      "image_path": "images/9d56873a96"
+    },
+    "6fc730e497": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "tr_02",
+      "image_path": "images/6fc730e497"
+    },
+    "ace3735986": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "cc_01",
+      "image_path": "images/ace3735986"
+    },
+    "1fa46c4bcc": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "cc_02",
+      "image_path": "images/1fa46c4bcc"
+    },
+    "ea3b40b3f5": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "cc_03",
+      "image_path": "images/ea3b40b3f5"
+    },
+    "d9057212f1": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "sa_01",
+      "image_path": "images/d9057212f1"
+    },
+    "98ab51fda1": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "sa_02",
+      "image_path": "images/98ab51fda1"
+    },
+    "21e6941ebb": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "prompt_id": "sa_03",
+      "image_path": "images/21e6941ebb"
+    }
+  },
+  "units": {
+    "817265fa84": {
+      "provider": "pollinations",
+      "axis": "prompt_fidelity",
+      "group": null,
+      "image_ids": [
+        "f390c43c21"
+      ]
+    },
+    "a96e21a409": {
+      "provider": "pollinations",
+      "axis": "text_rendering",
+      "group": null,
+      "image_ids": [
+        "489193a6e3"
+      ]
+    },
+    "aa1d1f9e5c": {
+      "provider": "pollinations",
+      "axis": "style_adherence",
+      "group": "gouache_storybook",
+      "image_ids": [
+        "b2dff11c5f"
+      ]
+    },
+    "5cf6a67e14": {
+      "provider": "cloudflare-flux-1-schnell",
+      "axis": "prompt_fidelity",
+      "group": null,
+      "image_ids": [
+        "be8ffdde82"
+      ]
+    },
+    "98e20b03fb": {
+      "provider": "cloudflare-flux-1-schnell",
+      "axis": "prompt_fidelity",
+      "group": null,
+      "image_ids": [
+        "3c2fd11eba"
+      ]
+    },
+    "dd809589b6": {
+      "provider": "cloudflare-flux-1-schnell",
+      "axis": "prompt_fidelity",
+      "group": null,
+      "image_ids": [
+        "ed50eadc7b"
+      ]
+    },
+    "ff99339d9c": {
+      "provider": "cloudflare-flux-1-schnell",
+      "axis": "text_rendering",
+      "group": null,
+      "image_ids": [
+        "7468144a6b"
+      ]
+    },
+    "ecc7bf1900": {
+      "provider": "cloudflare-flux-1-schnell",
+      "axis": "text_rendering",
+      "group": null,
+      "image_ids": [
+        "14c7029141"
+      ]
+    },
+    "9884c34bcf": {
+      "provider": "cloudflare-flux-1-schnell",
+      "axis": "text_rendering",
+      "group": null,
+      "image_ids": [
+        "a966c94960"
+      ]
+    },
+    "d636b5c455": {
+      "provider": "cloudflare-flux-1-schnell",
+      "axis": "character_consistency",
+      "group": "fox_courier",
+      "image_ids": [
+        "c3a776b84c",
+        "723eaf8eee",
+        "26ba7cc54b"
+      ]
+    },
+    "a114803a81": {
+      "provider": "cloudflare-flux-1-schnell",
+      "axis": "style_adherence",
+      "group": "gouache_storybook",
+      "image_ids": [
+        "41b92ce555",
+        "79fa20050c",
+        "9d036e65b1"
+      ]
+    },
+    "d5ab4ec1e8": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "axis": "prompt_fidelity",
+      "group": null,
+      "image_ids": [
+        "48eda67264"
+      ]
+    },
+    "a39ca6c9f6": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "axis": "prompt_fidelity",
+      "group": null,
+      "image_ids": [
+        "9d6ec5957e"
+      ]
+    },
+    "2c6a5fa340": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "axis": "text_rendering",
+      "group": null,
+      "image_ids": [
+        "a66fc8074b"
+      ]
+    },
+    "d88551afac": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "axis": "prompt_fidelity",
+      "group": null,
+      "image_ids": [
+        "6c302385df"
+      ]
+    },
+    "719ebaa340": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "axis": "text_rendering",
+      "group": null,
+      "image_ids": [
+        "9d56873a96"
+      ]
+    },
+    "c3e5c82687": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "axis": "text_rendering",
+      "group": null,
+      "image_ids": [
+        "6fc730e497"
+      ]
+    },
+    "ba46386b81": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "axis": "character_consistency",
+      "group": "fox_courier",
+      "image_ids": [
+        "ace3735986",
+        "1fa46c4bcc",
+        "ea3b40b3f5"
+      ]
+    },
+    "edeb4c8503": {
+      "provider": "cloudflare-flux-2-klein-4b",
+      "axis": "style_adherence",
+      "group": "gouache_storybook",
+      "image_ids": [
+        "d9057212f1",
+        "98ab51fda1",
+        "21e6941ebb"
+      ]
+    }
+  }
+}

@@ -1,0 +1,416 @@
+{
+  "run_id": "20261009-074747",
+  "units": [
+    {
+      "unit_id": "817265fa84",
+      "axis": "prompt_fidelity",
+      "anchors": "1 = constraints ignored, 3 = roughly half satisfied, 5 = all satisfied",
+      "set_checks": [],
+      "images": [
+        "images/f390c43c21"
+      ],
+      "prompts": [
+        {
+          "prompt": "Three ceramic coffee cups on a wooden table, viewed from the front. The tallest cup is on the left, the shortest on the right. Exactly one cup is red.",
+          "checks": [
+            "exactly three cups present",
+            "tallest cup is leftmost",
+            "shortest cup is rightmost",
+            "exactly one cup is red"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "a96e21a409",
+      "axis": "text_rendering",
+      "anchors": "1 = unreadable glyphs, 3 = readable with errors, 5 = exact and legible",
+      "set_checks": [],
+      "images": [
+        "images/489193a6e3"
+      ],
+      "prompts": [
+        {
+          "prompt": "A hand-lettered chalkboard menu with three lines reading exactly: SOUP 4, BREAD 2, TEA 3.",
+          "checks": [
+            "all three lines present",
+            "numbers correct: 4, 2, 3",
+            "words spelled correctly"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "aa1d1f9e5c",
+      "axis": "style_adherence",
+      "anchors": "1 = ignores style, 3 = partial, 5 = holds style across the set",
+      "set_checks": [
+        "visible brush and gouache texture in every image",
+        "palette held to slate blue, cream and burnt orange throughout",
+        "no drift toward photorealism or digital gloss in any image",
+        "reads as one illustrated world rather than three unrelated pictures"
+      ],
+      "images": [
+        "images/b2dff11c5f"
+      ],
+      "prompts": [
+        {
+          "prompt": "A fishing boat returning to a small harbour at dawn. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.",
+          "checks": []
+        }
+      ]
+    },
+    {
+      "unit_id": "5cf6a67e14",
+      "axis": "prompt_fidelity",
+      "anchors": "1 = constraints ignored, 3 = roughly half satisfied, 5 = all satisfied",
+      "set_checks": [],
+      "images": [
+        "images/be8ffdde82"
+      ],
+      "prompts": [
+        {
+          "prompt": "Three ceramic coffee cups on a wooden table, viewed from the front. The tallest cup is on the left, the shortest on the right. Exactly one cup is red.",
+          "checks": [
+            "exactly three cups present",
+            "tallest cup is leftmost",
+            "shortest cup is rightmost",
+            "exactly one cup is red"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "98e20b03fb",
+      "axis": "prompt_fidelity",
+      "anchors": "1 = constraints ignored, 3 = roughly half satisfied, 5 = all satisfied",
+      "set_checks": [],
+      "images": [
+        "images/3c2fd11eba"
+      ],
+      "prompts": [
+        {
+          "prompt": "A single orange cat sitting on a closed blue suitcase. The suitcase is on grass. No other animals or objects in frame.",
+          "checks": [
+            "exactly one cat",
+            "cat is orange",
+            "suitcase is blue and closed",
+            "no extra animals or objects"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "dd809589b6",
+      "axis": "prompt_fidelity",
+      "anchors": "1 = constraints ignored, 3 = roughly half satisfied, 5 = all satisfied",
+      "set_checks": [],
+      "images": [
+        "images/ed50eadc7b"
+      ],
+      "prompts": [
+        {
+          "prompt": "An empty wooden chair facing away from the camera, in the centre of an otherwise bare room. One window on the right-hand wall.",
+          "checks": [
+            "chair faces away from camera",
+            "chair is centred",
+            "exactly one window, on the right",
+            "room is otherwise bare"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "ff99339d9c",
+      "axis": "text_rendering",
+      "anchors": "1 = unreadable glyphs, 3 = readable with errors, 5 = exact and legible",
+      "set_checks": [],
+      "images": [
+        "images/7468144a6b"
+      ],
+      "prompts": [
+        {
+          "prompt": "A vintage enamel shop sign on a brick wall reading exactly: OPEN DAILY 7-5. Clean sans-serif capitals, high contrast.",
+          "checks": [
+            "text reads exactly 'OPEN DAILY 7-5'",
+            "all characters legible",
+            "no duplicated or invented extra words"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "ecc7bf1900",
+      "axis": "text_rendering",
+      "anchors": "1 = unreadable glyphs, 3 = readable with errors, 5 = exact and legible",
+      "set_checks": [],
+      "images": [
+        "images/14c7029141"
+      ],
+      "prompts": [
+        {
+          "prompt": "A paperback book cover on a plain background. The title reads exactly 'THE LONG AFTERNOON' and below it, smaller, the word 'NOVEL'.",
+          "checks": [
+            "title reads exactly 'THE LONG AFTERNOON'",
+            "subtitle reads exactly 'NOVEL'",
+            "spelling correct in both"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "9884c34bcf",
+      "axis": "text_rendering",
+      "anchors": "1 = unreadable glyphs, 3 = readable with errors, 5 = exact and legible",
+      "set_checks": [],
+      "images": [
+        "images/a966c94960"
+      ],
+      "prompts": [
+        {
+          "prompt": "A hand-lettered chalkboard menu with three lines reading exactly: SOUP 4, BREAD 2, TEA 3.",
+          "checks": [
+            "all three lines present",
+            "numbers correct: 4, 2, 3",
+            "words spelled correctly"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "d636b5c455",
+      "axis": "character_consistency",
+      "anchors": "1 = unrelated subjects, 3 = same type, different individual, 5 = same individual",
+      "set_checks": [
+        "all images show the same individual, not merely the same type of animal",
+        "torn left ear, green canvas satchel and red scarf carried through every image",
+        "markings, proportions and palette consistent across the set"
+      ],
+      "images": [
+        "images/c3a776b84c",
+        "images/723eaf8eee",
+        "images/26ba7cc54b"
+      ],
+      "prompts": [
+        {
+          "prompt": "Character sheet reference: a young fox courier with a torn left ear, a green canvas satchel and a red scarf. Flat 2D animation style, neutral grey background, standing facing the camera.",
+          "checks": []
+        },
+        {
+          "prompt": "The same young fox courier with a torn left ear, green canvas satchel and red scarf, now running across a rooftop at dusk. Flat 2D animation style.",
+          "checks": []
+        },
+        {
+          "prompt": "The same young fox courier with a torn left ear, green canvas satchel and red scarf, now sitting on a windowsill reading a letter. Flat 2D animation style.",
+          "checks": []
+        }
+      ]
+    },
+    {
+      "unit_id": "a114803a81",
+      "axis": "style_adherence",
+      "anchors": "1 = ignores style, 3 = partial, 5 = holds style across the set",
+      "set_checks": [
+        "visible brush and gouache texture in every image",
+        "palette held to slate blue, cream and burnt orange throughout",
+        "no drift toward photorealism or digital gloss in any image",
+        "reads as one illustrated world rather than three unrelated pictures"
+      ],
+      "images": [
+        "images/41b92ce555",
+        "images/79fa20050c",
+        "images/9d036e65b1"
+      ],
+      "prompts": [
+        {
+          "prompt": "A lighthouse on a cliff in heavy weather. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.",
+          "checks": []
+        },
+        {
+          "prompt": "A fishing boat returning to a small harbour at dawn. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.",
+          "checks": []
+        },
+        {
+          "prompt": "A row of terraced houses under rain. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.",
+          "checks": []
+        }
+      ]
+    },
+    {
+      "unit_id": "d5ab4ec1e8",
+      "axis": "prompt_fidelity",
+      "anchors": "1 = constraints ignored, 3 = roughly half satisfied, 5 = all satisfied",
+      "set_checks": [],
+      "images": [
+        "images/48eda67264"
+      ],
+      "prompts": [
+        {
+          "prompt": "A single orange cat sitting on a closed blue suitcase. The suitcase is on grass. No other animals or objects in frame.",
+          "checks": [
+            "exactly one cat",
+            "cat is orange",
+            "suitcase is blue and closed",
+            "no extra animals or objects"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "a39ca6c9f6",
+      "axis": "prompt_fidelity",
+      "anchors": "1 = constraints ignored, 3 = roughly half satisfied, 5 = all satisfied",
+      "set_checks": [],
+      "images": [
+        "images/9d6ec5957e"
+      ],
+      "prompts": [
+        {
+          "prompt": "Three ceramic coffee cups on a wooden table, viewed from the front. The tallest cup is on the left, the shortest on the right. Exactly one cup is red.",
+          "checks": [
+            "exactly three cups present",
+            "tallest cup is leftmost",
+            "shortest cup is rightmost",
+            "exactly one cup is red"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "2c6a5fa340",
+      "axis": "text_rendering",
+      "anchors": "1 = unreadable glyphs, 3 = readable with errors, 5 = exact and legible",
+      "set_checks": [],
+      "images": [
+        "images/a66fc8074b"
+      ],
+      "prompts": [
+        {
+          "prompt": "A vintage enamel shop sign on a brick wall reading exactly: OPEN DAILY 7-5. Clean sans-serif capitals, high contrast.",
+          "checks": [
+            "text reads exactly 'OPEN DAILY 7-5'",
+            "all characters legible",
+            "no duplicated or invented extra words"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "d88551afac",
+      "axis": "prompt_fidelity",
+      "anchors": "1 = constraints ignored, 3 = roughly half satisfied, 5 = all satisfied",
+      "set_checks": [],
+      "images": [
+        "images/6c302385df"
+      ],
+      "prompts": [
+        {
+          "prompt": "An empty wooden chair facing away from the camera, in the centre of an otherwise bare room. One window on the right-hand wall.",
+          "checks": [
+            "chair faces away from camera",
+            "chair is centred",
+            "exactly one window, on the right",
+            "room is otherwise bare"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "719ebaa340",
+      "axis": "text_rendering",
+      "anchors": "1 = unreadable glyphs, 3 = readable with errors, 5 = exact and legible",
+      "set_checks": [],
+      "images": [
+        "images/9d56873a96"
+      ],
+      "prompts": [
+        {
+          "prompt": "A hand-lettered chalkboard menu with three lines reading exactly: SOUP 4, BREAD 2, TEA 3.",
+          "checks": [
+            "all three lines present",
+            "numbers correct: 4, 2, 3",
+            "words spelled correctly"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "c3e5c82687",
+      "axis": "text_rendering",
+      "anchors": "1 = unreadable glyphs, 3 = readable with errors, 5 = exact and legible",
+      "set_checks": [],
+      "images": [
+        "images/6fc730e497"
+      ],
+      "prompts": [
+        {
+          "prompt": "A paperback book cover on a plain background. The title reads exactly 'THE LONG AFTERNOON' and below it, smaller, the word 'NOVEL'.",
+          "checks": [
+            "title reads exactly 'THE LONG AFTERNOON'",
+            "subtitle reads exactly 'NOVEL'",
+            "spelling correct in both"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_id": "ba46386b81",
+      "axis": "character_consistency",
+      "anchors": "1 = unrelated subjects, 3 = same type, different individual, 5 = same individual",
+      "set_checks": [
+        "all images show the same individual, not merely the same type of animal",
+        "torn left ear, green canvas satchel and red scarf carried through every image",
+        "markings, proportions and palette consistent across the set"
+      ],
+      "images": [
+        "images/ace3735986",
+        "images/1fa46c4bcc",
+        "images/ea3b40b3f5"
+      ],
+      "prompts": [
+        {
+          "prompt": "Character sheet reference: a young fox courier with a torn left ear, a green canvas satchel and a red scarf. Flat 2D animation style, neutral grey background, standing facing the camera.",
+          "checks": []
+        },
+        {
+          "prompt": "The same young fox courier with a torn left ear, green canvas satchel and red scarf, now running across a rooftop at dusk. Flat 2D animation style.",
+          "checks": []
+        },
+        {
+          "prompt": "The same young fox courier with a torn left ear, green canvas satchel and red scarf, now sitting on a windowsill reading a letter. Flat 2D animation style.",
+          "checks": []
+        }
+      ]
+    },
+    {
+      "unit_id": "edeb4c8503",
+      "axis": "style_adherence",
+      "anchors": "1 = ignores style, 3 = partial, 5 = holds style across the set",
+      "set_checks": [
+        "visible brush and gouache texture in every image",
+        "palette held to slate blue, cream and burnt orange throughout",
+        "no drift toward photorealism or digital gloss in any image",
+        "reads as one illustrated world rather than three unrelated pictures"
+      ],
+      "images": [
+        "images/d9057212f1",
+        "images/98ab51fda1",
+        "images/21e6941ebb"
+      ],
+      "prompts": [
+        {
+          "prompt": "A lighthouse on a cliff in heavy weather. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.",
+          "checks": []
+        },
+        {
+          "prompt": "A fishing boat returning to a small harbour at dawn. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.",
+          "checks": []
+        },
+        {
+          "prompt": "A row of terraced houses under rain. Muted gouache storybook illustration, visible brush texture, limited palette of slate blue, cream and burnt orange, soft edges, no digital gloss.",
+          "checks": []
+        }
+      ]
+    }
+  ]
+}

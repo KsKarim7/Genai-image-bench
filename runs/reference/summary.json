@@ -1,0 +1,88 @@
+{
+  "cloudflare-flux-1-schnell": {
+    "attempts": 12,
+    "succeeded": 12,
+    "success_rate": 100.0,
+    "first_attempt_rate": 100.0,
+    "succeeded_first_attempt": 12,
+    "median_generated_latency_s": 2.88,
+    "max_generated_latency_s": 4.67,
+    "p90_generated_latency_s": 3.62,
+    "median_cache_read_s": null,
+    "cache": null,
+    "est_cost_usd": 0.0,
+    "formats": [
+      "image/jpeg"
+    ],
+    "failures": {},
+    "axis_scores": {
+      "character_consistency": 4,
+      "prompt_fidelity": 4,
+      "style_adherence": 4,
+      "text_rendering": 3.33
+    },
+    "overall_score": 3.83,
+    "axes_scored": 4,
+    "n_scored": 8,
+    "excluded_singletons": 0
+  },
+  "cloudflare-flux-2-klein-4b": {
+    "attempts": 12,
+    "succeeded": 12,
+    "success_rate": 100.0,
+    "first_attempt_rate": 100.0,
+    "succeeded_first_attempt": 12,
+    "median_generated_latency_s": 14.96,
+    "max_generated_latency_s": 22.8,
+    "p90_generated_latency_s": 18.89,
+    "median_cache_read_s": null,
+    "cache": null,
+    "est_cost_usd": 0.0,
+    "formats": [
+      "image/jpeg"
+    ],
+    "failures": {},
+    "axis_scores": {
+      "character_consistency": 3,
+      "prompt_fidelity": 5,
+      "style_adherence": 4,
+      "text_rendering": 3
+    },
+    "overall_score": 3.75,
+    "axes_scored": 4,
+    "n_scored": 8,
+    "excluded_singletons": 0
+  },
+  "pollinations": {
+    "attempts": 12,
+    "succeeded": 3,
+    "success_rate": 25.0,
+    "first_attempt_rate": 8.3,
+    "succeeded_first_attempt": 1,
+    "median_generated_latency_s": 3.42,
+    "max_generated_latency_s": 4.35,
+    "p90_generated_latency_s": 4.16,
+    "median_cache_read_s": null,
+    "cache": {
+      "hit": 0,
+      "miss": 3
+    },
+    "est_cost_usd": 0.0,
+    "formats": [
+      "image/jpeg"
+    ],
+    "failures": {
+      "payment_required": 9
+    },
+    "axis_scores": {
+      "character_consistency": null,
+      "prompt_fidelity": 3,
+      "style_adherence": null,
+      "text_rendering": 1
+    },
+    "overall_score": 2,
+    "axes_scored": 2,
+    "n_scored": 2,
+    "excluded_singletons": 1
+  }
+}

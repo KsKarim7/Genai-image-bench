@@ -1,0 +1,97 @@
+{
+  "9884c34bcf": {
+    "score": 4,
+    "note": "extra stray 2 between BREAD and TEA; all required text correct",
+    "axis": "text_rendering"
+  },
+  "d88551afac": {
+    "score": 5,
+    "note": "all checkpoints passed",
+    "axis": "prompt_fidelity"
+  },
+  "ff99339d9c": {
+    "score": 3,
+    "note": "text doesn't read exactly stated , one of the word is incomplete",
+    "axis": "text_rendering"
+  },
+  "a96e21a409": {
+    "score": 1,
+    "note": "unreadable glyphs",
+    "axis": "text_rendering"
+  },
+  "5cf6a67e14": {
+    "score": 3,
+    "note": "leftmost is not clearly the tallest, one of the cup is not fully and inconsistancy in the shape of one of the cups",
+    "axis": "prompt_fidelity"
+  },
+  "98e20b03fb": {
+    "score": 5,
+    "note": "all checkpoints satisfied",
+    "axis": "prompt_fidelity"
+  },
+  "a114803a81": {
+    "score": 4,
+    "note": "one of the image doesn't sense make",
+    "axis": "style_adherence"
+  },
+  "817265fa84": {
+    "score": 3,
+    "note": "leftmost one is not the tallest and rightmost one is not the shortest",
+    "axis": "prompt_fidelity"
+  },
+  "aa1d1f9e5c": {
+    "score": 5,
+    "note": "satisfied",
+    "axis": "style_adherence"
+  },
+  "d636b5c455": {
+    "score": 4,
+    "note": null,
+    "axis": "character_consistency"
+  },
+  "edeb4c8503": {
+    "score": 4,
+    "note": null,
+    "axis": "style_adherence"
+  },
+  "dd809589b6": {
+    "score": 4,
+    "note": "chair is not exactly centered",
+    "axis": "prompt_fidelity"
+  },
+  "719ebaa340": {
+    "score": 4,
+    "note": null,
+    "axis": "text_rendering"
+  },
+  "a39ca6c9f6": {
+    "score": 5,
+    "note": "all satisfied",
+    "axis": "prompt_fidelity"
+  },
+  "d5ab4ec1e8": {
+    "score": 5,
+    "note": "all satisfied",
+    "axis": "prompt_fidelity"
+  },
+  "2c6a5fa340": {
+    "score": 2,
+    "note": "all characters are not legible and duplicates are present",
+    "axis": "text_rendering"
+  },
+  "ecc7bf1900": {
+    "score": 3,
+    "note": "title is not exactly spelled",
+    "axis": "text_rendering"
+  },
+  "c3e5c82687": {
+    "score": 3,
+    "note": "title mispelled",
+    "axis": "text_rendering"
+  },
+  "ba46386b81": {
+    "score": 3,
+    "note": "left ear is not torned",
+    "axis": "character_consistency"
+  }
+}
