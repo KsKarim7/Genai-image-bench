@@ -115,10 +115,7 @@ def _payment_detail(response: httpx.Response) -> str:
 
 
 class ContentRefused(Exception):
-    """A provider declined on content-policy grounds. Never worth retrying.
-
-    No current adapter raises it; it is the contract for one that needs to.
-    """
+    """A provider declined on content-policy grounds. Never worth retrying."""
 
 
 class BaseProvider:
@@ -217,6 +214,23 @@ class Pollinations(BaseProvider):
         )
 
 
+# Workers AI answers a blocked prompt with HTTP 400 and code 8007, which would
+# otherwise classify as http_client: a malformed request rather than a refusal.
+_WORKERS_REFUSAL_CODES = {8007}
+
+
+def _workers_refusal(response: httpx.Response) -> str | None:
+    try:
+        errors = response.json().get("errors") or []
+    except ValueError:
+        return None
+    for error in errors:
+        message = error.get("message") or ""
+        if error.get("code") in _WORKERS_REFUSAL_CODES or "nsfw" in message.lower():
+            return message[:300] or f"code {error.get('code')}"
+    return None
+
+
 class _WorkersAI(BaseProvider):
     """Cloudflare Workers AI.
 
@@ -250,6 +264,10 @@ class _WorkersAI(BaseProvider):
             headers={"Authorization": f"Bearer {self.api_token}"},
             **self.request_kwargs(prompt),
         )
+        if resp.status_code == 400:
+            reason = _workers_refusal(resp)
+            if reason:
+                raise ContentRefused(reason)
         resp.raise_for_status()
         payload = resp.json()
 

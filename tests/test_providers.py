@@ -178,6 +178,69 @@ class CloudflareAdapter(unittest.TestCase):
         self.assertNotIn("http_client", RETRYABLE)
 
 
+class WorkersAiContentRefusal(unittest.TestCase):
+    """flux-1-schnell refused a benign character-sheet prompt as NSFW in run
+    20261009-053831. It arrived as HTTP 400 and classified as http_client, which
+    loses the distinction between a malformed request and a policy refusal."""
+
+    REAL_BODY = {
+        "errors": [{
+            "message": "AiError: AiError: Input prompt contains NSFW content. "
+                       "(bd40edba-ba52-4d2d-8952-af3471313f4e)",
+            "code": 8007,
+        }],
+        "success": False, "result": {}, "messages": [],
+    }
+
+    def setUp(self):
+        os.environ["CLOUDFLARE_ACCOUNT_ID"] = "acct123"
+        os.environ["CLOUDFLARE_API_TOKEN"] = "tok456"
+        self.provider = CloudflareFluxSchnell()
+
+    def _call(self, payload, status):
+        def handler(request):
+            return httpx.Response(status, json=payload)
+        return _run(self.provider, handler)
+
+    def test_the_real_nsfw_body_becomes_a_refusal(self):
+        from bench.runner import RETRYABLE
+        with self.assertRaises(ContentRefused) as caught:
+            self._call(self.REAL_BODY, 400)
+        kind, detail = self.provider.classify_error(caught.exception)
+        self.assertEqual(kind, "refused")
+        self.assertNotIn(kind, RETRYABLE)
+        self.assertIn("NSFW", detail)
+
+    def test_an_nsfw_message_without_the_code_is_still_a_refusal(self):
+        body = {"errors": [{"message": "blocked: nsfw content detected", "code": 9999}],
+                "success": False}
+        with self.assertRaises(ContentRefused):
+            self._call(body, 400)
+
+    def test_a_non_refusal_400_stays_http_client(self):
+        body = {"errors": [{"message": "AiError: Bad input: required properties at "
+                                       "'/' are 'multipart'", "code": 5006}],
+                "success": False}
+        with self.assertRaises(httpx.HTTPStatusError) as caught:
+            self._call(body, 400)
+        self.assertEqual(self.provider.classify_error(caught.exception)[0], "http_client")
+
+    def test_a_400_with_an_unparseable_body_stays_http_client(self):
+        def handler(request):
+            return httpx.Response(400, text="<html>gateway</html>")
+        with self.assertRaises(httpx.HTTPStatusError) as caught:
+            _run(self.provider, handler)
+        self.assertEqual(self.provider.classify_error(caught.exception)[0], "http_client")
+
+    def test_other_statuses_are_untouched_by_the_refusal_check(self):
+        for status, expected in ((401, "http_client"), (429, "rate_limit"),
+                                 (500, "http_server")):
+            with self.assertRaises(httpx.HTTPStatusError) as caught:
+                self._call({"errors": []}, status)
+            self.assertEqual(
+                self.provider.classify_error(caught.exception)[0], expected, status)
+
+
 class KleinSendsMultipart(unittest.TestCase):
     """klein-4b rejects a JSON body with "required properties at '/' are
     'multipart'". The encoding was established by probing the live API, so it is
