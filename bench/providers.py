@@ -23,6 +23,9 @@ LIST_PRICE_USD_PER_IMAGE = {
     "gemini-3.1-flash-lite-image": 0.0336,
     "gemini-3.1-flash-image": 0.067,
     "pollinations": 0.0,
+    # Inside the Workers free allocation, so nothing is spent. List rate is in the
+    # README reference table.
+    "cloudflare-flux-1-schnell": 0.0,
 }
 
 
@@ -65,6 +68,26 @@ class GeneratedImage:
     data: bytes
     content_type: str
     meta: dict = field(default_factory=dict)
+
+
+_MAGIC = (
+    (bytes([0xFF, 0xD8, 0xFF]), "image/jpeg"),
+    (bytes([0x89]) + b"PNG", "image/png"),
+    (b"RIFF", "image/webp"),
+    (b"GIF8", "image/gif"),
+)
+
+
+def sniff_image_type(data: bytes) -> str:
+    """Read the format off the bytes.
+
+    Workers AI returns bare base64 with no mime type, and output format is a
+    reported datum here, so it is sniffed rather than assumed.
+    """
+    for magic, mime in _MAGIC:
+        if data.startswith(magic):
+            return mime
+    return "application/octet-stream"
 
 
 def _payment_detail(response: httpx.Response) -> str:
@@ -288,10 +311,59 @@ class Pollinations(BaseProvider):
         )
 
 
+class CloudflareFluxSchnell(BaseProvider):
+    """Cloudflare Workers AI, FLUX.1 [schnell].
+
+    Free allocation is 10,000 Neurons/day with no payment method. At 4.80 Neurons
+    per 512x512 tile plus 9.60 per step over 4 steps, a 12-prompt run spends a few
+    hundred, so the cap is not a constraint at this size.
+    """
+
+    name = "cloudflare-flux-1-schnell"
+    model_id = "@cf/black-forest-labs/flux-1-schnell"
+    # schnell is a 4-step distilled model; its own ceiling is 8.
+    steps = 4
+    max_concurrency = 2
+
+    def __init__(self) -> None:
+        self.account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
+        self.api_token = os.getenv("CLOUDFLARE_API_TOKEN", "").strip()
+
+    def available(self) -> bool:
+        return bool(self.account_id and self.api_token)
+
+    async def generate(self, client: httpx.AsyncClient, prompt: str) -> GeneratedImage:
+        resp = await client.post(
+            f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}"
+            f"/ai/run/{self.model_id}",
+            headers={"Authorization": f"Bearer {self.api_token}"},
+            json={"prompt": prompt, "steps": self.steps},
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+
+        # Workers AI can answer HTTP 200 with success=false and the reason in errors,
+        # which would otherwise read as a malformed response.
+        if payload.get("success") is False:
+            raise ValueError(f"workers ai reported failure: {payload.get('errors')}")
+
+        encoded = (payload.get("result") or {}).get("image")
+        if not encoded:
+            raise ValueError(f"no image in response: {str(payload)[:200]}")
+
+        data = base64.b64decode(encoded)
+        return GeneratedImage(
+            data,
+            sniff_image_type(data),
+            {"model": self.model_id, "steps": self.steps},
+        )
+
+
 ALL_PROVIDERS: list[type[BaseProvider]] = [
     GeminiFlashLiteImage,
     GeminiFlashImage,
     Pollinations,
+    CloudflareFluxSchnell,
 ]
 
 

@@ -118,6 +118,12 @@ demonstrably easy to break by accident; a careful read had already missed it twi
 
 ## What this does not claim
 
+- This benchmark was built and run entirely on free tiers, with nothing spent.
+  That constrained which providers are in it: models with no free allocation were
+  excluded regardless of merit, so the comparison covers what can be measured for
+  nothing rather than the strongest models available. Published list prices are in
+  the reference table below so the cost argument can still be made, but no figure
+  reported here was paid for.
 - Scores come from a single human scorer on a small prompt set. They indicate
   direction, not statistical significance. Inter-rater reliability would need
   multiple scorers; that hasn't been done.
@@ -176,6 +182,7 @@ getting a concurrency cap each.
 |---|---|---|---|---|
 | `gemini-3.1-flash-lite-image` | Standard, paid | **$0.0336** | Published per-image rate. Cross-checks against $30.00 per 1M output tokens at roughly 1,120 tokens per image. | [ai.google.dev pricing](https://ai.google.dev/gemini-api/docs/pricing), page last updated 2026-10-07, read 2026-10-09 |
 | `gemini-3.1-flash-image` | Standard, paid | **$0.067** | Published per-image rate at 1K. Cross-checks against $60.00 per 1M output tokens at roughly 1,120 tokens per image. | [ai.google.dev pricing](https://ai.google.dev/gemini-api/docs/pricing), page last updated 2026-10-07, read 2026-10-09 |
+| `cloudflare-flux-1-schnell` | Workers free allocation | **$0** in use | 10,000 Neurons/day at no charge and no payment method. flux-1-schnell costs 4.80 Neurons per 512x512 tile plus 9.60 per step, so ~43 Neurons per 512px image at the default 4 steps and a 12-prompt run spends a few hundred. List rate is $0.0000528 per tile and $0.0001056 per step. | [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/), read 2026-10-09 |
 | `pollinations` | Anonymous, keyless | **$0**, gated rather than billed | Unpaid requests are refused with HTTP 402, not charged. The x402 challenge asks 10000 base units of USDC (6 decimals) = 0.01 USDC, so ~$0.01 is the price of not being gated. | Measured from the `payment-required` response header, 2026-10-08 |
 
 No Gemini image model has a free tier: Google lists "Free Tier: Not available" for all
