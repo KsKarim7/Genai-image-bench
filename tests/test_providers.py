@@ -217,16 +217,21 @@ class PollinationsSeeding(unittest.TestCase):
         self.assertEqual(image.meta["model"], "sana")
 
     def test_prompt_is_percent_encoded_into_the_path(self):
+        """url.path is decoded, so the raw path is what shows the encoding."""
         seen = {}
 
         def handler(request):
-            seen["path"] = request.url.path
+            seen["raw"] = request.url.raw_path.decode("ascii")
             return httpx.Response(200, content=JPEG,
                                   headers={"content-type": "image/jpeg"})
 
         _run(self.provider, handler, "a/b slash and ? and #")
-        self.assertNotIn("/b", seen["path"].split("/prompt/", 1)[1])
-        self.assertIn("%2F", seen["path"])
+        segment = seen["raw"].split("/prompt/", 1)[1].split("?", 1)[0]
+        # The prompt must not escape its path segment or start a query.
+        self.assertNotIn("/", segment)
+        self.assertIn("%2F", segment)
+        self.assertIn("%3F", segment)
+        self.assertIn("%23", segment)
 
 
 class WorkersAiContentRefusal(unittest.TestCase):
