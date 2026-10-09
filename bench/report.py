@@ -171,10 +171,6 @@ def build_report(run_dir: Path) -> Path:
         ops[provider]["axis_scores"] = {
             axis: _mean(by_provider_axis.get((provider, axis), [])) for axis in axes
         }
-        # TODO: overall_score is an unweighted mean over units, so prompt_fidelity
-        # and text_rendering (3 units each) outweigh character_consistency and
-        # style_adherence (1 set each) three to one. Mean of axis means would weight
-        # the four axes equally. Which is right depends on which axes matter.
         # Unweighted mean across axes, not across units. prompt_fidelity and
         # text_rendering have three units each while the grouped axes have one, and
         # that ratio is a property of how the suite was written, not of the models.
