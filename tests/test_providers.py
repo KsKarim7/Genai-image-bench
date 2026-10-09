@@ -17,6 +17,7 @@ import unittest
 import httpx
 
 from bench.providers import (
+    BackendFailure,
     BaseProvider,
     CloudflareFluxKlein4b,
     CloudflareFluxSchnell,
@@ -295,6 +296,71 @@ class WorkersAiContentRefusal(unittest.TestCase):
                 self._call({"errors": []}, status)
             self.assertEqual(
                 self.provider.classify_error(caught.exception)[0], expected, status)
+
+
+class WorkersAiBackendFailure(unittest.TestCase):
+    """Workers AI overloads code 8007: a blocked prompt (400) and a failed
+    inference (409) both carry it, so the message is what separates them. A
+    refusal is permanent; a failed prediction on a well-formed request is not."""
+
+    PREDICTION_FAILED = {
+        "errors": [{
+            "message": "AiError: AiError: Cog prediction failed "
+                       "(c2859b1b-c8b4-4890-8f8c-565a56ecd7c7)",
+            "code": 8007,
+        }],
+        "success": False, "result": {}, "messages": [],
+    }
+
+    def setUp(self):
+        os.environ["CLOUDFLARE_ACCOUNT_ID"] = "acct123"
+        os.environ["CLOUDFLARE_API_TOKEN"] = "tok456"
+        self.provider = CloudflareFluxSchnell()
+
+    def _call(self, payload, status):
+        def handler(request):
+            return httpx.Response(status, json=payload)
+        return _run(self.provider, handler)
+
+    def test_prediction_failure_is_transient_and_retried(self):
+        from bench.runner import RETRYABLE
+        with self.assertRaises(BackendFailure) as caught:
+            self._call(self.PREDICTION_FAILED, 409)
+        kind, detail = self.provider.classify_error(caught.exception)
+        self.assertEqual(kind, "backend_failure")
+        self.assertIn(kind, RETRYABLE)
+        self.assertIn("prediction failed", detail.lower())
+
+    def test_the_overloaded_code_alone_does_not_mean_refused(self):
+        """8007 with neither NSFW nor prediction wording is just a client error."""
+        body = {"errors": [{"message": "AiError: something else", "code": 8007}],
+                "success": False}
+        with self.assertRaises(httpx.HTTPStatusError) as caught:
+            self._call(body, 400)
+        self.assertEqual(self.provider.classify_error(caught.exception)[0], "http_client")
+
+    def test_a_refusal_is_still_permanent(self):
+        from bench.runner import RETRYABLE
+        body = {"errors": [{"message": "AiError: Input prompt contains NSFW content.",
+                            "code": 8007}], "success": False}
+        with self.assertRaises(ContentRefused) as caught:
+            self._call(body, 400)
+        kind, _ = self.provider.classify_error(caught.exception)
+        self.assertEqual(kind, "refused")
+        self.assertNotIn(kind, RETRYABLE)
+
+    def test_refusal_wins_over_backend_failure_if_both_appear(self):
+        body = {"errors": [
+            {"message": "AiError: Cog prediction failed (x)", "code": 8007},
+            {"message": "AiError: Input prompt contains NSFW content.", "code": 8007},
+        ], "success": False}
+        with self.assertRaises(ContentRefused):
+            self._call(body, 409)
+
+    def test_a_prediction_failure_at_any_status_is_recognised(self):
+        for status in (409, 500, 503):
+            with self.assertRaises(BackendFailure):
+                self._call(self.PREDICTION_FAILED, status)
 
 
 class KleinSendsMultipart(unittest.TestCase):

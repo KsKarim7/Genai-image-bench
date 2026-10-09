@@ -41,8 +41,8 @@ class GenerationResult:
     # http_client is permanent, http_server and network transient; parse means an
     # exchange we could not form or read.
     error_kind: Optional[str] = None     # timeout | network | rate_limit | payment_required
-                                         # | not_entitled | refused | http_client
-                                         # | http_server | parse | unknown
+                                         # | not_entitled | refused | backend_failure
+                                         # | http_client | http_server | parse | unknown
     error_detail: Optional[str] = None
     meta: dict = field(default_factory=dict)
 
@@ -119,6 +119,14 @@ class ContentRefused(Exception):
     """A provider declined on content-policy grounds. Never worth retrying."""
 
 
+class BackendFailure(Exception):
+    """The request was accepted and the provider inference backend failed.
+
+    Transient on its merits: the request is well-formed, nothing about it needs
+    changing, and the same request may well succeed. Worth retrying.
+    """
+
+
 class BaseProvider:
     name: str = "base"
     # Conservative default; free tiers rate-limit aggressively.
@@ -142,6 +150,8 @@ class BaseProvider:
         """Map an exception to (error_kind, detail)."""
         if isinstance(exc, ContentRefused):
             return "refused", str(exc)
+        if isinstance(exc, BackendFailure):
+            return "backend_failure", str(exc)
         # TimeoutException is itself a TransportError, so it must be tested first.
         if isinstance(exc, httpx.TimeoutException):
             return "timeout", str(exc) or "request timed out"
@@ -226,20 +236,29 @@ class Pollinations(BaseProvider):
         )
 
 
-# Workers AI answers a blocked prompt with HTTP 400 and code 8007, which would
-# otherwise classify as http_client: a malformed request rather than a refusal.
-_WORKERS_REFUSAL_CODES = {8007}
-
-
-def _workers_refusal(response: httpx.Response) -> str | None:
+# Workers AI overloads error code 8007 across unrelated conditions: a blocked
+# prompt (HTTP 400) and a failed inference (HTTP 409) both carry it. The message is
+# what separates them, so these match on text and ignore the code. One is permanent
+# and one is transient, and both would otherwise land in http_client.
+def _workers_messages(response: httpx.Response) -> list[str]:
     try:
         errors = response.json().get("errors") or []
     except ValueError:
-        return None
-    for error in errors:
-        message = error.get("message") or ""
-        if error.get("code") in _WORKERS_REFUSAL_CODES or "nsfw" in message.lower():
-            return message[:300] or f"code {error.get('code')}"
+        return []
+    return [error.get("message") or "" for error in errors]
+
+
+def _workers_refusal(response: httpx.Response) -> str | None:
+    for message in _workers_messages(response):
+        if "nsfw" in message.lower():
+            return message[:300]
+    return None
+
+
+def _workers_backend_failure(response: httpx.Response) -> str | None:
+    for message in _workers_messages(response):
+        if "prediction failed" in message.lower():
+            return message[:300]
     return None
 
 
@@ -276,10 +295,13 @@ class _WorkersAI(BaseProvider):
             headers={"Authorization": f"Bearer {self.api_token}"},
             **self.request_kwargs(prompt),
         )
-        if resp.status_code == 400:
-            reason = _workers_refusal(resp)
-            if reason:
-                raise ContentRefused(reason)
+        if resp.status_code >= 400:
+            refusal = _workers_refusal(resp)
+            if refusal:
+                raise ContentRefused(refusal)
+            backend = _workers_backend_failure(resp)
+            if backend:
+                raise BackendFailure(backend)
         resp.raise_for_status()
         payload = resp.json()
 

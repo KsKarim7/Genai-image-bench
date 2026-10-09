@@ -32,9 +32,12 @@ REQUEST_TIMEOUT = httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=10.0)
 MAX_ATTEMPTS = 3
 # payment_required is retryable on evidence: the x402 gate is rate-driven and backoff
 # recovered 3 of 12 outputs in run 20261008-162624. 4xx and refusals are permanent.
+# backend_failure is here because a failed inference on a well-formed request is
+# transient: nothing about the request needs changing for it to succeed.
 # not_entitled is deliberately absent: a zero quota cannot be waited out, and the
 # Gemini smoke run spent two Retry-After sleeps per request discovering that.
-RETRYABLE = {"rate_limit", "payment_required", "timeout", "network", "http_server"}
+RETRYABLE = {"rate_limit", "payment_required", "timeout", "network", "http_server",
+             "backend_failure"}
 
 
 def load_prompts(config_path: Path, axis: str | None = None) -> tuple[dict, list[dict]]:

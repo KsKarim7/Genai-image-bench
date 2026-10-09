@@ -95,7 +95,18 @@ def build_report(run_dir: Path) -> Path:
             "attempts": len(rows),
             "succeeded": len(ok_rows),
             "success_rate": round(100 * len(ok_rows) / len(rows), 1) if rows else 0.0,
+            # Both rates, because the one a pipeline decision turns on is whether
+            # retrying is affordable. Reporting only the post-retry figure would also
+            # let a reclassification that enables retries flatter the result.
+            "first_attempt_rate": (
+                round(100 * sum(1 for r in ok_rows if r["meta"].get("attempts") == 1)
+                      / len(rows), 1) if rows else 0.0
+            ),
+            "succeeded_first_attempt": sum(
+                1 for r in ok_rows if r["meta"].get("attempts") == 1
+            ),
             "median_generated_latency_s": _median(gen_lat),
+            "max_generated_latency_s": round(max(gen_lat), 2) if gen_lat else None,
             "p90_generated_latency_s": _p90(gen_lat),
             "median_cache_read_s": _median(hit_lat),
             "cache": (
@@ -203,9 +214,11 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
 
     summary_rows = "".join(
         f"<tr><td class='name'>{esc(p)}</td>"
+        f"<td>{ops[p]['succeeded_first_attempt']}/{ops[p]['attempts']} "
+        f"({ops[p]['first_attempt_rate']}%)</td>"
         f"<td>{ops[p]['succeeded']}/{ops[p]['attempts']} ({ops[p]['success_rate']}%)</td>"
         f"<td>{ops[p]['median_generated_latency_s'] if ops[p]['median_generated_latency_s'] is not None else '—'}</td>"
-        f"<td>{ops[p]['p90_generated_latency_s'] if ops[p]['p90_generated_latency_s'] is not None else '—'}</td>"
+        f"<td>{ops[p]['max_generated_latency_s'] if ops[p]['max_generated_latency_s'] is not None else '—'}</td>"
         f"<td>{_cache_cell(ops[p])}</td>"
         f"<td class='cdn'>{ops[p]['median_cache_read_s'] if ops[p]['median_cache_read_s'] is not None else '—'}</td>"
         f"<td>{_cost_cell(ops[p])}</td>"
@@ -277,9 +290,11 @@ def _render_html(payload, ops, providers, axes, prompts, score_by_image, image_p
 scored blind, unblinded at report time</div>
 
 <h2>Summary</h2>
-<table><thead><tr><th>provider</th><th>success</th>
+<table><thead><tr><th>provider</th>
+<th>success<br><span class="qual">first attempt</span></th>
+<th>success<br><span class="qual">with retries</span></th>
 <th>median latency<br><span class="qual">generated</span></th>
-<th>p90 latency<br><span class="qual">generated</span></th>
+<th>max latency<br><span class="qual">generated</span></th>
 <th>cache</th>
 <th>cache read<br><span class="qual">CDN, not the model</span></th>
 <th>est. cost</th><th>format</th>{axis_headers}

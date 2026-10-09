@@ -61,6 +61,24 @@ invisibility. A model that produces excellent images 60% of the time is a differ
 engineering proposition from one that is merely good every time, and an aggregate
 quality score hides that.
 
+**Failures are classified on what they are, not on what the HTTP status suggests.**
+Two cases from this build pull in opposite directions. Google answers a model you
+are not entitled to with HTTP 429 and `limit: 0`, which looks like a rate limit and
+is a permanent entitlement failure, so it is `not_entitled` and never retried.
+Cloudflare answers a failed inference with HTTP 409, which looks like a client error
+and is a transient backend failure on a well-formed request, so it is
+`backend_failure` and is retried. The second reclassification also recovered scoring
+coverage that had been lost to it, but that is a consequence of fixing a
+misclassification rather than the reason for it: a failed prediction carrying a
+request id is transient whether or not any coverage depends on it.
+
+**Both success rates are reported**, first attempt and after retries. Either alone
+misleads. The post-retry figure hides how much work success took; the first-attempt
+figure hides that the work is often cheap. It is also the distinction a pipeline
+decision actually turns on, which is whether retrying is affordable. Keeping both
+visible means a reclassification that enables retries cannot quietly flatter the
+result, because the pre-retry number stays on the page.
+
 **Cost and latency are recorded per request.** A model that is 8% better at 20x the
 cost is not better for most pipeline work.
 
@@ -140,12 +158,14 @@ demonstrably easy to break by accident; a careful read had already missed it twi
   part of any difference on those two axes belongs to the encoder rather than the
   model. The scoring view shows every image at the same display width, which blunts
   the resolution half of this and not the compression half.
-- Latency on a free tier is not a stable property of a model. flux-1-schnell returned
-  27.4-58.6s over three requests in one run, and 1.92-7.22s over eleven requests
-  twenty minutes later, on the same prompts. The larger sample is the better estimate,
-  but the first is not an error: a tenfold swing is a thing free tiers do, and no
-  single run measures it. Every latency figure here carries the n behind it for that
-  reason, and none of them should be read as a property of the model alone.
+- Latency on a free tier is not a stable property of a model, and is not averaged
+  into one figure here. flux-1-schnell was observed in three windows on the same
+  prompts: 27.4-58.6s (n=3), then 1.92-7.22s (n=11), then 5.18-38.34s (n=8). That
+  reads as regime-switching rather than variance around a mean, so the windows are
+  reported separately with their n and no pooled median is given for it. Maximum is
+  reported beside median for the same reason: flux-2-klein-4b at a 15.71s median with
+  a 118s maximum is a different proposition from one reliably at 15s, and the median
+  alone hides it.
 - Scores come from a single human scorer on a small prompt set. They indicate
   direction, not statistical significance. Inter-rater reliability would need
   multiple scorers; that hasn't been done.
@@ -254,7 +274,11 @@ record rather than build output.
        - Pollinations latency split by cache hit and miss, with the caveat that
          suite prompts were already warm by the time the reference run was made
        - anything that contradicted expectation
-       - what the numbers do not support -->
+       - what the numbers do not support
+       - lead the Pollinations finding with fast, free and unreliable rather than
+         with the failure rate alone: 3.28s median against 15.71 and 32.50 is a real
+         advantage for anything that can absorb the failures
+       - report flux-1-schnell latency as three windows with their n, not pooled -->
 
 ## Repo layout
 
