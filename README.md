@@ -159,10 +159,10 @@ demonstrably easy to break by accident; a careful read had already missed it twi
   model. The scoring view shows every image at the same display width, which blunts
   the resolution half of this and not the compression half.
 - Latency on a free tier is not a stable property of a model, and is not averaged
-  into one figure here. flux-1-schnell was observed in three windows on the same
-  prompts: 27.4-58.6s (n=3), then 1.92-7.22s (n=11), then 5.18-38.34s (n=8). That
-  reads as regime-switching rather than variance around a mean, so the windows are
-  reported separately with their n and no pooled median is given for it. Maximum is
+  into one figure here. flux-1-schnell was observed in four windows on the same
+  prompts: 27.4-58.6s (n=3), 1.92-7.22s (n=11), 5.18-38.34s (n=8), 2.10-4.67s (n=12).
+  That reads as regime-switching rather than variance around a mean, so the windows
+  are reported separately with their n and no pooled median is given for it. Maximum is
   reported beside median for the same reason: flux-2-klein-4b at a 15.71s median with
   a 118s maximum is a different proposition from one reliably at 15s, and the median
   alone hides it.
@@ -184,6 +184,10 @@ demonstrably easy to break by accident; a careful read had already missed it twi
   concurrency 2, and 5.23s over 6 at concurrency 1. The ranges overlap almost
   entirely, so the conditions are not distinguishable at these sample sizes, but
   they are reported separately rather than pooled.
+- Success rate is not stable either, and one run does not establish it. Pollinations
+  returned 41.7% and then 25.0% across two fully cold runs of the same suite, both
+  n=12, and 91.7% on a run where ten of twelve responses came from its cache. Only
+  the cold figures measure the provider, and even those disagree by a factor of 1.7.
 - Set-scored axes produce one score per provider per group, so character
   consistency and style adherence each rest on a single judgement by a single
   scorer. Where some generations in a group failed, the set is scored on the
