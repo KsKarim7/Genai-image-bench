@@ -32,6 +32,8 @@ REQUEST_TIMEOUT = httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=10.0)
 MAX_ATTEMPTS = 3
 # payment_required is retryable on evidence: the x402 gate is rate-driven and backoff
 # recovered 3 of 12 outputs in run 20261008-162624. 4xx and refusals are permanent.
+# not_entitled is deliberately absent: a zero quota cannot be waited out, and the
+# Gemini smoke run spent two Retry-After sleeps per request discovering that.
 RETRYABLE = {"rate_limit", "payment_required", "timeout", "network", "http_server"}
 
 
@@ -82,6 +84,7 @@ async def _attempt(
 
     last_kind, last_detail = "unknown", "no attempt made"
     attempts_made = 0
+    waited: list[float] = []
     for attempt in range(1, MAX_ATTEMPTS + 1):
         attempts_made = attempt
         started = time.perf_counter()
@@ -120,6 +123,7 @@ async def _attempt(
             # A server that says when to come back beats guessing with our own curve.
             hinted = provider.retry_after_seconds(exc)
             delay = hinted if hinted is not None else (2 ** attempt) + random.uniform(0, 1.5)
+            waited.append(round(delay, 1))
             print(f"    {provider.name}/{prompt_id}: {last_kind}, retry in {delay:.1f}s")
             await asyncio.sleep(delay)
 
@@ -131,7 +135,7 @@ async def _attempt(
         latency_s=round(latency, 3),
         error_kind=last_kind,
         error_detail=last_detail,
-        meta={"attempts": attempts_made},
+        meta={"attempts": attempts_made, "backoff_s": waited},
     )
 
 

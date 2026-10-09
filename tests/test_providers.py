@@ -17,10 +17,10 @@ import unittest
 import httpx
 
 from bench.providers import (
+    BaseProvider,
+    CloudflareFluxKlein4b,
     CloudflareFluxSchnell,
     ContentRefused,
-    GeminiFlashImage,
-    GeminiFlashLiteImage,
     sniff_image_type,
 )
 
@@ -44,6 +44,59 @@ class SniffImageType(unittest.TestCase):
 
     def test_unknown_is_not_claimed_to_be_an_image(self):
         self.assertEqual(sniff_image_type(b"not an image"), "application/octet-stream")
+
+
+class ErrorTaxonomy(unittest.TestCase):
+    """The kinds that are not reachable from any current adapter still have to
+    behave, because the runner decides retries from them."""
+
+    @staticmethod
+    def _status(code, body=""):
+        response = httpx.Response(code, text=body,
+                                  request=httpx.Request("GET", "https://example.test"))
+        return httpx.HTTPStatusError("e", request=response.request, response=response)
+
+    def test_zero_quota_429_is_not_a_rate_limit(self):
+        from bench.runner import RETRYABLE
+        body = ('{"error":{"message":"Rate limit exceeded for model x '
+                '(limit: 0 requests per day on Free Tier)."}}')
+        kind, detail = BaseProvider.classify_error(self._status(429, body))
+        self.assertEqual(kind, "not_entitled")
+        self.assertNotIn(kind, RETRYABLE)
+        self.assertIn("limit: 0", detail)
+
+    def test_zero_quota_on_a_token_metric_too(self):
+        body = '{"error":{"message":"... (limit: 0 input tokens per minute on Free Tier)."}}'
+        self.assertEqual(BaseProvider.classify_error(self._status(429, body))[0],
+                         "not_entitled")
+
+    def test_a_real_ceiling_stays_retryable(self):
+        from bench.runner import RETRYABLE
+        body = '{"error":{"message":"... (limit: 1500 requests per day)."}}'
+        kind, _ = BaseProvider.classify_error(self._status(429, body))
+        self.assertEqual(kind, "rate_limit")
+        self.assertIn(kind, RETRYABLE)
+
+    def test_a_zero_prefixed_ceiling_is_not_mistaken_for_zero(self):
+        body = '{"error":{"message":"... (limit: 05 requests per day)."}}'
+        self.assertEqual(BaseProvider.classify_error(self._status(429, body))[0],
+                         "rate_limit")
+
+    def test_a_429_with_no_limit_text_stays_a_rate_limit(self):
+        self.assertEqual(BaseProvider.classify_error(self._status(429, "slow down"))[0],
+                         "rate_limit")
+
+    def test_content_refused_maps_to_refused_and_is_never_retried(self):
+        from bench.runner import RETRYABLE
+        kind, detail = BaseProvider.classify_error(ContentRefused("blockReason=SAFETY"))
+        self.assertEqual(kind, "refused")
+        self.assertNotIn(kind, RETRYABLE)
+        self.assertIn("SAFETY", detail)
+
+    def test_error_bodies_are_kept_long_enough_to_diagnose(self):
+        body = "x" * 600
+        _, detail = BaseProvider.classify_error(self._status(400, body))
+        self.assertGreater(len(detail), 300)
 
 
 class CloudflareAdapter(unittest.TestCase):
@@ -125,75 +178,61 @@ class CloudflareAdapter(unittest.TestCase):
         self.assertNotIn("http_client", RETRYABLE)
 
 
-class GeminiAdapter(unittest.TestCase):
+class KleinSendsMultipart(unittest.TestCase):
+    """klein-4b rejects a JSON body with "required properties at '/' are
+    'multipart'". The encoding was established by probing the live API, so it is
+    pinned here."""
+
     def setUp(self):
-        os.environ["GOOGLE_API_KEY"] = "gkey"
+        os.environ["CLOUDFLARE_ACCOUNT_ID"] = "acct123"
+        os.environ["CLOUDFLARE_API_TOKEN"] = "tok456"
+        self.provider = CloudflareFluxKlein4b()
         self.seen = {}
 
-    def _handler(self, data=PNG, mime="image/png"):
+    def _handler(self, request: httpx.Request) -> httpx.Response:
+        self.seen["content_type"] = request.headers.get("content-type", "")
+        self.seen["raw"] = request.content
+        self.seen["url"] = str(request.url)
+        return httpx.Response(200, json={
+            "result": {"image": base64.b64encode(JPEG).decode()},
+            "success": True, "errors": [], "messages": [],
+        })
+
+    def test_request_is_multipart_form_data_with_a_prompt_field(self):
+        image = _run(self.provider, self._handler, "a plain grey square")
+        self.assertTrue(self.seen["content_type"].startswith("multipart/form-data"))
+        self.assertIn(b'name="prompt"', self.seen["raw"])
+        self.assertIn(b"a plain grey square", self.seen["raw"])
+        self.assertNotIn(b'{"prompt"', self.seen["raw"])
+        self.assertEqual(image.data, JPEG)
+
+    def test_endpoint_names_the_klein_model(self):
+        _run(self.provider, self._handler)
+        self.assertTrue(self.seen["url"].endswith(
+            "/ai/run/@cf/black-forest-labs/flux-2-klein-4b"))
+
+    def test_meta_records_the_model_and_no_step_count(self):
+        image = _run(self.provider, self._handler)
+        self.assertEqual(image.meta["model"], "@cf/black-forest-labs/flux-2-klein-4b")
+        self.assertNotIn("steps", image.meta)
+
+    def test_schnell_still_sends_json_not_multipart(self):
+        provider = CloudflareFluxSchnell()
+        seen = {}
+
         def handler(request: httpx.Request) -> httpx.Response:
-            self.seen["url"] = str(request.url)
-            self.seen["key"] = request.headers.get("x-goog-api-key")
-            self.seen["body"] = json.loads(request.content)
-            return httpx.Response(200, json={"interaction": {
-                "id": "ix_1", "model": self.seen["body"]["model"],
-                "outputImage": {"data": base64.b64encode(data).decode(), "mimeType": mime},
-            }})
-        return handler
-
-    def test_both_models_post_to_the_interactions_endpoint(self):
-        for cls, model in ((GeminiFlashLiteImage, "gemini-3.1-flash-lite-image"),
-                           (GeminiFlashImage, "gemini-3.1-flash-image")):
-            image = _run(cls(), self._handler())
-            self.assertEqual(
-                self.seen["url"],
-                "https://generativelanguage.googleapis.com/v1beta/interactions",
-            )
-            self.assertEqual(self.seen["key"], "gkey")
-            self.assertEqual(self.seen["body"]["model"], model)
-            self.assertEqual(self.seen["body"]["input"],
-                             [{"type": "text", "text": "a plain grey square"}])
-            self.assertEqual(self.seen["body"]["response_format"],
-                             {"type": "image", "aspect_ratio": "1:1", "image_size": "1K"})
-            self.assertEqual(image.meta["model_version"], model)
-            self.assertEqual(image.meta["image_size"], "1K")
-
-    def test_both_models_share_one_quota_gate(self):
-        self.assertEqual(GeminiFlashLiteImage().gate(), GeminiFlashImage().gate())
-
-    def test_snake_case_response_is_accepted(self):
-        def handler(request):
-            return httpx.Response(200, json={"interaction": {
-                "output_image": {"data": base64.b64encode(JPEG).decode(),
-                                 "mime_type": "image/jpeg"}}})
-        image = _run(GeminiFlashLiteImage(), handler)
-        self.assertEqual(image.content_type, "image/jpeg")
-
-    def test_steps_fallback_is_accepted(self):
-        def handler(request):
-            return httpx.Response(200, json={"interaction": {"steps": [
-                {"type": "model_output",
-                 "content": [{"type": "image", "data": base64.b64encode(PNG).decode()}]}]}})
-        self.assertEqual(_run(GeminiFlashLiteImage(), handler).data, PNG)
-
-    def test_recognised_refusal_becomes_refused_and_is_not_retried(self):
-        from bench.runner import RETRYABLE
-        def handler(request):
+            seen["content_type"] = request.headers.get("content-type", "")
+            seen["body"] = json.loads(request.content)
             return httpx.Response(200, json={
-                "interaction": {"finishReason": "PROHIBITED_CONTENT"}})
-        with self.assertRaises(ContentRefused) as caught:
-            _run(GeminiFlashLiteImage(), handler)
-        self.assertEqual(
-            GeminiFlashLiteImage.classify_error(caught.exception)[0], "refused")
-        self.assertNotIn("refused", RETRYABLE)
+                "result": {"image": base64.b64encode(JPEG).decode()}, "success": True})
 
-    def test_unrecognised_response_is_not_guessed_into_refused(self):
-        def handler(request):
-            return httpx.Response(200, json={"interaction": {"id": "ix_2"}})
-        with self.assertRaises(ValueError) as caught:
-            _run(GeminiFlashLiteImage(), handler)
-        self.assertEqual(
-            GeminiFlashLiteImage.classify_error(caught.exception)[0], "parse")
+        _run(provider, handler, "a cat")
+        self.assertEqual(seen["content_type"], "application/json")
+        self.assertEqual(seen["body"], {"prompt": "a cat", "steps": 4})
+
+    def test_both_workers_models_share_one_quota_gate(self):
+        self.assertEqual(CloudflareFluxSchnell().gate(), CloudflareFluxKlein4b().gate())
+        self.assertEqual(CloudflareFluxKlein4b().gate(), "cloudflare-workers-ai")
 
 
 if __name__ == "__main__":

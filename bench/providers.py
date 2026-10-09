@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import urllib.parse
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
@@ -17,15 +18,13 @@ from typing import Optional
 
 import httpx
 
-# List prices, not measured spend. Standard tier, never batch: batch halves the
-# Gemini price and destroys the latency measurement. README has the cited table.
+# List prices, not measured spend. Every provider here runs inside a free
+# allocation, so these are zero and the report says "free tier"; the README
+# reference table carries the published rates behind them.
 LIST_PRICE_USD_PER_IMAGE = {
-    "gemini-3.1-flash-lite-image": 0.0336,
-    "gemini-3.1-flash-image": 0.067,
     "pollinations": 0.0,
-    # Inside the Workers free allocation, so nothing is spent. List rate is in the
-    # README reference table.
     "cloudflare-flux-1-schnell": 0.0,
+    "cloudflare-flux-2-klein-4b": 0.0,
 }
 
 
@@ -41,7 +40,8 @@ class GenerationResult:
     # http_client is permanent, http_server and network transient; parse means an
     # exchange we could not form or read.
     error_kind: Optional[str] = None     # timeout | network | rate_limit | payment_required
-                                         # | refused | http_client | http_server | parse | unknown
+                                         # | not_entitled | refused | http_client
+                                         # | http_server | parse | unknown
     error_detail: Optional[str] = None
     meta: dict = field(default_factory=dict)
 
@@ -90,6 +90,12 @@ def sniff_image_type(data: bytes) -> str:
     return "application/octet-stream"
 
 
+# Google answers an un-entitled model with 429 and "limit: 0 ... on Free Tier".
+# A zero ceiling is an entitlement failure wearing a rate-limit code, and waiting
+# does not move it.
+_ZERO_QUOTA = re.compile(r"limit:\s*0(?!\d)", re.IGNORECASE)
+
+
 def _payment_detail(response: httpx.Response) -> str:
     """x402 sends an empty JSON body; the challenge rides in a base64 header."""
     header = response.headers.get("payment-required")
@@ -109,18 +115,10 @@ def _payment_detail(response: httpx.Response) -> str:
 
 
 class ContentRefused(Exception):
-    """The provider declined on content-policy grounds. Never worth retrying."""
+    """A provider declined on content-policy grounds. Never worth retrying.
 
-
-# finishReason values meaning the model declined, as opposed to the call failing.
-_REFUSAL_FINISH_REASONS = {
-    "SAFETY",
-    "PROHIBITED_CONTENT",
-    "BLOCKLIST",
-    "IMAGE_SAFETY",
-    "RECITATION",
-    "SPII",
-}
+    No current adapter raises it; it is the contract for one that needs to.
+    """
 
 
 class BaseProvider:
@@ -152,11 +150,14 @@ class BaseProvider:
         if isinstance(exc, httpx.HTTPStatusError):
             code = exc.response.status_code
             if code == 429:
-                return "rate_limit", f"HTTP 429: {exc.response.text[:200]}"
+                body = exc.response.text[:400]
+                if _ZERO_QUOTA.search(body):
+                    return "not_entitled", f"HTTP 429: {body}"
+                return "rate_limit", f"HTTP 429: {body}"
             if code == 402:
                 return "payment_required", f"HTTP 402: {_payment_detail(exc.response)}"
             kind = "http_server" if code >= 500 else "http_client"
-            return kind, f"HTTP {code}: {exc.response.text[:200]}"
+            return kind, f"HTTP {code}: {exc.response.text[:400]}"
         if isinstance(exc, httpx.TransportError):
             return "network", f"{type(exc).__name__}: {exc}"
         if isinstance(exc, (httpx.InvalidURL, KeyError, IndexError, ValueError)):
@@ -182,101 +183,6 @@ class BaseProvider:
         if when.tzinfo is None:
             when = when.replace(tzinfo=timezone.utc)
         return min(max((when - datetime.now(timezone.utc)).total_seconds(), 0.0), cap)
-
-
-def _refusal_reason(node: dict) -> str | None:
-    """Only a known refusal value counts. The /interactions refusal shape is
-    undocumented, so anything unrecognised stays a parse error with the body
-    attached rather than being guessed into the wrong bucket."""
-    for key in ("blockReason", "block_reason", "finishReason", "finish_reason"):
-        value = node.get(key)
-        if isinstance(value, str) and value.upper() in _REFUSAL_FINISH_REASONS:
-            return f"{key}={value}"
-    feedback = node.get("promptFeedback") or node.get("prompt_feedback") or {}
-    reason = feedback.get("blockReason") or feedback.get("block_reason")
-    return f"blockReason={reason}" if reason else None
-
-
-class _GeminiImage(BaseProvider):
-    """Shared adapter for the Gemini 3.1 image models.
-
-    They are not on models/{id}:generateContent: they take a response_format on
-    /v1beta/interactions and return the image under interaction.outputImage.
-
-    Both models run at 1K. Lite supports nothing else, and holding the full model
-    there too keeps the Lite-against-full comparison about the model rather than
-    about output resolution.
-    """
-
-    model_id = ""
-    image_size = "1K"
-    aspect_ratio = "1:1"
-    max_concurrency = 2
-    quota_key = "google-ai-studio"
-
-    def __init__(self) -> None:
-        self.api_key = os.getenv("GOOGLE_API_KEY", "").strip()
-
-    def available(self) -> bool:
-        return bool(self.api_key)
-
-    async def generate(self, client: httpx.AsyncClient, prompt: str) -> GeneratedImage:
-        resp = await client.post(
-            "https://generativelanguage.googleapis.com/v1beta/interactions",
-            headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
-            json={
-                "model": self.model_id,
-                "input": [{"type": "text", "text": prompt}],
-                "response_format": {
-                    "type": "image",
-                    "aspect_ratio": self.aspect_ratio,
-                    "image_size": self.image_size,
-                },
-            },
-        )
-        resp.raise_for_status()
-        payload = resp.json()
-        interaction = payload.get("interaction") or payload
-
-        image = (
-            interaction.get("outputImage")
-            or interaction.get("output_image")
-            or {}
-        )
-        if image.get("data"):
-            return GeneratedImage(
-                base64.b64decode(image["data"]),
-                image.get("mimeType") or image.get("mime_type") or "image/png",
-                {
-                    "model_version": interaction.get("model") or self.model_id,
-                    "interaction_id": interaction.get("id"),
-                    "image_size": self.image_size,
-                },
-            )
-
-        for step in interaction.get("steps") or []:
-            for part in step.get("content") or []:
-                if part.get("type") == "image" and part.get("data"):
-                    return GeneratedImage(
-                        base64.b64decode(part["data"]),
-                        part.get("mimeType") or "image/png",
-                        {"model_version": self.model_id, "image_size": self.image_size},
-                    )
-
-        reason = _refusal_reason(interaction) or _refusal_reason(payload)
-        if reason:
-            raise ContentRefused(reason)
-        raise ValueError(f"no image in interaction response: {str(payload)[:200]}")
-
-
-class GeminiFlashLiteImage(_GeminiImage):
-    name = "gemini-3.1-flash-lite-image"
-    model_id = "gemini-3.1-flash-lite-image"
-
-
-class GeminiFlashImage(_GeminiImage):
-    name = "gemini-3.1-flash-image"
-    model_id = "gemini-3.1-flash-image"
 
 
 class Pollinations(BaseProvider):
@@ -311,18 +217,17 @@ class Pollinations(BaseProvider):
         )
 
 
-class CloudflareFluxSchnell(BaseProvider):
-    """Cloudflare Workers AI, FLUX.1 [schnell].
+class _WorkersAI(BaseProvider):
+    """Cloudflare Workers AI.
 
-    Free allocation is 10,000 Neurons/day with no payment method. At 4.80 Neurons
-    per 512x512 tile plus 9.60 per step over 4 steps, a 12-prompt run spends a few
-    hundred, so the cap is not a constraint at this size.
+    10,000 Neurons per day at no charge and no payment method, shared across every
+    model, so all of them sit behind one quota gate. Models disagree on how the
+    request is encoded and agree on the response: JSON carrying the image as
+    base64, with HTTP 200 plus success=false for routing and model errors.
     """
 
-    name = "cloudflare-flux-1-schnell"
-    model_id = "@cf/black-forest-labs/flux-1-schnell"
-    # schnell is a 4-step distilled model; its own ceiling is 8.
-    steps = 4
+    model_id = ""
+    quota_key = "cloudflare-workers-ai"
     max_concurrency = 2
 
     def __init__(self) -> None:
@@ -332,18 +237,23 @@ class CloudflareFluxSchnell(BaseProvider):
     def available(self) -> bool:
         return bool(self.account_id and self.api_token)
 
+    def request_kwargs(self, prompt: str) -> dict:
+        raise NotImplementedError
+
+    def request_meta(self) -> dict:
+        return {}
+
     async def generate(self, client: httpx.AsyncClient, prompt: str) -> GeneratedImage:
         resp = await client.post(
             f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}"
             f"/ai/run/{self.model_id}",
             headers={"Authorization": f"Bearer {self.api_token}"},
-            json={"prompt": prompt, "steps": self.steps},
+            **self.request_kwargs(prompt),
         )
         resp.raise_for_status()
         payload = resp.json()
 
-        # Workers AI can answer HTTP 200 with success=false and the reason in errors,
-        # which would otherwise read as a malformed response.
+        # HTTP 200 with success=false would otherwise read as a malformed response.
         if payload.get("success") is False:
             raise ValueError(f"workers ai reported failure: {payload.get('errors')}")
 
@@ -355,15 +265,45 @@ class CloudflareFluxSchnell(BaseProvider):
         return GeneratedImage(
             data,
             sniff_image_type(data),
-            {"model": self.model_id, "steps": self.steps},
+            {"model": self.model_id, **self.request_meta()},
         )
 
 
+class CloudflareFluxSchnell(_WorkersAI):
+    """FLUX.1 [schnell]: 4.80 Neurons per 512x512 tile plus 9.60 per step."""
+
+    name = "cloudflare-flux-1-schnell"
+    model_id = "@cf/black-forest-labs/flux-1-schnell"
+    # Distilled to 4 steps; its own ceiling is 8.
+    steps = 4
+
+    def request_kwargs(self, prompt: str) -> dict:
+        return {"json": {"prompt": prompt, "steps": self.steps}}
+
+    def request_meta(self) -> dict:
+        return {"steps": self.steps}
+
+
+class CloudflareFluxKlein4b(_WorkersAI):
+    """FLUX.2 [klein] 4B: 26.05 Neurons per output 512x512 tile.
+
+    Rejects a JSON body -- its input schema requires a multipart envelope, and
+    multipart/form-data with a prompt field is what it accepts. Established by
+    probing, because the docs carry no request example for it.
+    """
+
+    name = "cloudflare-flux-2-klein-4b"
+    model_id = "@cf/black-forest-labs/flux-2-klein-4b"
+
+    def request_kwargs(self, prompt: str) -> dict:
+        # files= makes httpx send multipart; (None, value) is a plain field.
+        return {"files": {"prompt": (None, prompt)}}
+
+
 ALL_PROVIDERS: list[type[BaseProvider]] = [
-    GeminiFlashLiteImage,
-    GeminiFlashImage,
     Pollinations,
     CloudflareFluxSchnell,
+    CloudflareFluxKlein4b,
 ]
 
 

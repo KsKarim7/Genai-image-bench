@@ -118,12 +118,23 @@ demonstrably easy to break by accident; a careful read had already missed it twi
 
 ## What this does not claim
 
-- This benchmark was built and run entirely on free tiers, with nothing spent.
-  That constrained which providers are in it: models with no free allocation were
-  excluded regardless of merit, so the comparison covers what can be measured for
-  nothing rather than the strongest models available. Published list prices are in
-  the reference table below so the cost argument can still be made, but no figure
-  reported here was paid for.
+- This benchmark was built and run entirely on free tiers, with nothing spent. That
+  constrained which providers are in it, so the comparison covers what can be
+  measured for nothing rather than the strongest models available. Published list
+  prices are in the reference table below so the cost argument can still be made,
+  but no figure reported here was paid for.
+- Gemini was excluded on evidence rather than on the pricing page. Both 3.1 image
+  models answered every request with HTTP 429 and `limit: 0 requests per day on
+  Free Tier`, so the free tier exists as a tier and grants no quota at all. A zero
+  ceiling is an entitlement failure wearing a rate-limit code, and the harness
+  records it as its own `not_entitled` kind rather than retrying something that
+  waiting cannot change. The pricing page agreed, but the run is what settled it.
+- Output resolution and compression are not held constant, because the providers do
+  not expose them uniformly. Pollinations returns 768x768 JPEG at 34-61 KiB; both
+  Workers AI models return 1024x1024 JPEG at 443-772 KiB. More pixels and lighter
+  compression plausibly both help on text rendering and on judging brush texture, so
+  part of any difference on those two axes belongs to the encoding rather than to the
+  model. This is a real confound and it is not corrected for.
 - Scores come from a single human scorer on a small prompt set. They indicate
   direction, not statistical significance. Inter-rater reliability would need
   multiple scorers; that hasn't been done.
@@ -169,28 +180,18 @@ uses. These are published rates, not measured billing: what a run would cost, no
 the results table reports. The results table reports this run. API pricing moves, so
 every figure below is dated and shows its derivation.
 
-Batch and Flex tiers are cheaper and are deliberately not used. Batch roughly halves
-the Gemini price, and destroys the latency measurement that is one of the four things
-being compared.
-
-Both Gemini models run at 1K output. Lite supports nothing else, and holding the full
-model there as well keeps the Lite-against-full comparison about the model rather than
-about resolution. They share one credential, so they share one rate gate rather than
-getting a concurrency cap each.
+Both Workers AI models draw on one account and so one 10,000 Neuron daily allowance,
+which is why they share a rate gate rather than getting a concurrency cap each. A full
+12-prompt run across both spends about 1,942 Neurons, under a fifth of one day.
 
 | Provider | Tier used | List price / image | Derivation | Source |
 |---|---|---|---|---|
-| `gemini-3.1-flash-lite-image` | Standard, paid | **$0.0336** | Published per-image rate. Cross-checks against $30.00 per 1M output tokens at roughly 1,120 tokens per image. | [ai.google.dev pricing](https://ai.google.dev/gemini-api/docs/pricing), page last updated 2026-10-07, read 2026-10-09 |
-| `gemini-3.1-flash-image` | Standard, paid | **$0.067** | Published per-image rate at 1K. Cross-checks against $60.00 per 1M output tokens at roughly 1,120 tokens per image. | [ai.google.dev pricing](https://ai.google.dev/gemini-api/docs/pricing), page last updated 2026-10-07, read 2026-10-09 |
-| `cloudflare-flux-1-schnell` | Workers free allocation | **$0** in use | 10,000 Neurons/day at no charge and no payment method. flux-1-schnell costs 4.80 Neurons per 512x512 tile plus 9.60 per step, so ~43 Neurons per 512px image at the default 4 steps and a 12-prompt run spends a few hundred. List rate is $0.0000528 per tile and $0.0001056 per step. | [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/), read 2026-10-09 |
+| `cloudflare-flux-1-schnell` | Workers free allocation | **$0** in use | 10,000 Neurons/day at no charge, no payment method. 4.80 Neurons per 512x512 tile plus 9.60 per step; measured output is 1024x1024, so 4 tiles at 4 steps is 57.6 Neurons per image and 691 for a 12-prompt run. List rate is $0.0000528 per tile and $0.0001056 per step, so about $0.00063 per image if it were billed. | [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/), read 2026-10-09 |
+| `cloudflare-flux-2-klein-4b` | Workers free allocation | **$0** in use | Same allowance. 26.05 Neurons per output 512x512 tile with no step multiplier, so 104.2 per 1024x1024 image and 1,250 for a 12-prompt run. Cheapest of the six priced Workers AI image models after schnell; the rest cost 1,300 to 2,600 Neurons per image and would exhaust the daily allowance inside a single run. | [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/), read 2026-10-09 |
 | `pollinations` | Anonymous, keyless | **$0**, gated rather than billed | Unpaid requests are refused with HTTP 402, not charged. The x402 challenge asks 10000 base units of USDC (6 decimals) = 0.01 USDC, so ~$0.01 is the price of not being gated. | Measured from the `payment-required` response header, 2026-10-08 |
 
-No Gemini image model has a free tier: Google lists "Free Tier: Not available" for all
-of them as of 2026-10-09. `gemini-2.5-flash-image`, which this harness targeted first,
-is deprecated, and Google's own documentation contradicts itself on when it goes away
--- the pricing page says it shut down on 2026-10-02, the deprecations table says
-2027-03-15. That is left unresolved here because the harness moved to the named
-replacement rather than depend on either date.
+Gemini is absent from this table because it is absent from the benchmark. See the
+limitation above for how that was established.
 
 ## Setup
 
