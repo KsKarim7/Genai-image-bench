@@ -129,12 +129,23 @@ demonstrably easy to break by accident; a careful read had already missed it twi
   ceiling is an entitlement failure wearing a rate-limit code, and the harness
   records it as its own `not_entitled` kind rather than retrying something that
   waiting cannot change. The pricing page agreed, but the run is what settled it.
-- Output resolution and compression are not held constant, because the providers do
-  not expose them uniformly. Pollinations returns 768x768 JPEG at 34-61 KiB; both
-  Workers AI models return 1024x1024 JPEG at 443-772 KiB. More pixels and lighter
+- Output resolution and compression are not held constant, and cannot be on these
+  endpoints. Pollinations returns 768x768 JPEG at 34-61 KiB; both Workers AI models
+  return 1024x1024 JPEG at 443-772 KiB, roughly ten times the bytes for under twice
+  the pixels. Equalising was attempted and does not work: the documented Pollinations
+  API takes `width` and `height` with a default of 1024, but the anonymous endpoint
+  ignores them and serves `sana` at 768x768 regardless, measured twice; and
+  flux-1-schnell exposes no size parameter at all. More pixels and lighter
   compression plausibly both help on text rendering and on judging brush texture, so
-  part of any difference on those two axes belongs to the encoding rather than to the
-  model. This is a real confound and it is not corrected for.
+  part of any difference on those two axes belongs to the encoder rather than the
+  model. The scoring view shows every image at the same display width, which blunts
+  the resolution half of this and not the compression half.
+- Latency on a free tier is not a stable property of a model. flux-1-schnell returned
+  27.4-58.6s over three requests in one run, and 1.92-7.22s over eleven requests
+  twenty minutes later, on the same prompts. The larger sample is the better estimate,
+  but the first is not an error: a tenfold swing is a thing free tiers do, and no
+  single run measures it. Every latency figure here carries the n behind it for that
+  reason, and none of them should be read as a property of the model alone.
 - Scores come from a single human scorer on a small prompt set. They indicate
   direction, not statistical significance. Inter-rater reliability would need
   multiple scorers; that hasn't been done.
