@@ -235,8 +235,14 @@ python -m unittest discover -s tests -t .
 
 `runs/` is ignored by default; committing a run is a deliberate act. One curated,
 scored and reported run lives in `runs/reference/` as evidence that the blind
-procedure was executed rather than merely described — generations are unseeded and
-not reproducible, so that run is a record, not build output.
+procedure was executed rather than merely described.
+
+Reproducibility is split. Pollinations requests carry a random seed, recorded per
+image in `results.json`, and the seed is honoured: two independent generations from
+one seed returned byte-identical images, so those requests can be re-issued. The
+Workers AI models expose no seed, so their outputs cannot be regenerated at all. The
+case for committing a run therefore rests on the Workers AI images, which are a
+record rather than build output.
 
 ## Results
 

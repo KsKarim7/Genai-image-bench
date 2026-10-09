@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import random
 import re
 import urllib.parse
 from dataclasses import dataclass, field, asdict
@@ -191,11 +192,21 @@ class Pollinations(BaseProvider):
     max_concurrency = 1
 
     async def generate(self, client: httpx.AsyncClient, prompt: str) -> GeneratedImage:
+        # A fresh seed per request does two things. It defeats the year-long
+        # immutable cache, so a run measures generation rather than a CDN read, and
+        # it is honoured: two independent generations with one seed returned
+        # byte-identical images, so recording it makes the request re-issuable.
+        #
+        # No width or height. The endpoint honours the requested aspect and clamps
+        # to roughly 0.59 megapixels, so asking for 1024x1024 yields 768x768 while
+        # asking for width alone yields 886x665 -- a worse aspect mismatch against
+        # the square Workers AI outputs than the resolution gap it would fix.
+        seed = random.randrange(2**31)
         # quote(safe="") not httpx.URL(path=...): that leaves "/" unescaped so a
         # prompt can inject path segments, and raises InvalidURL on "?" or "#".
         resp = await client.get(
             "https://image.pollinations.ai/prompt/" + urllib.parse.quote(prompt, safe=""),
-            params={"nologo": "true"},
+            params={"nologo": "true", "seed": str(seed)},
             follow_redirects=True,
         )
         resp.raise_for_status()
@@ -210,6 +221,7 @@ class Pollinations(BaseProvider):
             {
                 "x_cache": resp.headers.get("x-cache"),
                 "model": resp.headers.get("x-model-used"),
+                "seed": seed,
             },
         )
 

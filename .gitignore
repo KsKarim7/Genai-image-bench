@@ -5,8 +5,8 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# Generations are unseeded, so a run cannot be reproduced — committing one is how
-# the blind-scoring claim stays checkable. Whitelisted, not default, so it is a
+# The Workers AI outputs expose no seed and cannot be reproduced, so committing
+# a run is how the blind-scoring claim stays checkable. Whitelisted, not default, so it is a
 # deliberate act and not whatever `git add .` happened to sweep up.
 runs/*
 !runs/.gitkeep

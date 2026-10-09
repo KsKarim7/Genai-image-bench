@@ -21,6 +21,7 @@ from bench.providers import (
     CloudflareFluxKlein4b,
     CloudflareFluxSchnell,
     ContentRefused,
+    Pollinations,
     sniff_image_type,
 )
 
@@ -176,6 +177,56 @@ class CloudflareAdapter(unittest.TestCase):
             self.assertEqual(kind, expected, f"HTTP {status}")
         self.assertIn("rate_limit", RETRYABLE)
         self.assertNotIn("http_client", RETRYABLE)
+
+
+class PollinationsSeeding(unittest.TestCase):
+    """The seed defeats a year-long immutable cache, so a run measures generation
+    rather than a CDN read, and it is honoured, so recording it makes the request
+    re-issuable. No width or height: the endpoint honours the requested aspect and
+    clamps to about 0.59 MP, so asking for a square 1024 gives 768 and asking for
+    width alone gives 886x665."""
+
+    def setUp(self):
+        self.provider = Pollinations()
+        self.seen = []
+
+    def _handler(self, request: httpx.Request) -> httpx.Response:
+        self.seen.append(dict(request.url.params))
+        return httpx.Response(200, content=JPEG, headers={
+            "content-type": "image/jpeg", "x-cache": "MISS", "x-model-used": "sana"})
+
+    def test_every_request_carries_a_seed(self):
+        image = _run(self.provider, self._handler)
+        self.assertIn("seed", self.seen[0])
+        self.assertTrue(self.seen[0]["seed"].isdigit())
+        self.assertEqual(str(image.meta["seed"]), self.seen[0]["seed"])
+
+    def test_the_seed_changes_between_requests(self):
+        _run(self.provider, self._handler)
+        _run(self.provider, self._handler)
+        self.assertNotEqual(self.seen[0]["seed"], self.seen[1]["seed"])
+
+    def test_no_size_parameters_are_sent(self):
+        _run(self.provider, self._handler)
+        self.assertNotIn("width", self.seen[0])
+        self.assertNotIn("height", self.seen[0])
+
+    def test_cache_status_and_model_still_recorded(self):
+        image = _run(self.provider, self._handler)
+        self.assertEqual(image.meta["x_cache"], "MISS")
+        self.assertEqual(image.meta["model"], "sana")
+
+    def test_prompt_is_percent_encoded_into_the_path(self):
+        seen = {}
+
+        def handler(request):
+            seen["path"] = request.url.path
+            return httpx.Response(200, content=JPEG,
+                                  headers={"content-type": "image/jpeg"})
+
+        _run(self.provider, handler, "a/b slash and ? and #")
+        self.assertNotIn("/b", seen["path"].split("/prompt/", 1)[1])
+        self.assertIn("%2F", seen["path"])
 
 
 class WorkersAiContentRefusal(unittest.TestCase):
